@@ -1,0 +1,8 @@
+﻿{
+  "name": "cmd-tool-clean",
+  "version": "0.1.0",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron ."
+  }
+}

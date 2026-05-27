@@ -1,205 +1,526 @@
-﻿<!doctype html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="utf-8">
-<title>CMD Visible Panel</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  body{margin:0;background:#0b1020;color:#eef3ff;font-family:Segoe UI,Arial,sans-serif}
-  .wrap{max-width:1200px;margin:0 auto;padding:18px}
-  h1{margin:0 0 12px;font-size:24px}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .box{background:#121a2f;border:2px solid #263653;border-radius:18px;padding:14px}
-  .cmdBox{border-color:#ffd166;box-shadow:0 0 0 2px rgba(255,209,102,.15)}
-  label{display:block;color:#9aa9c7;font-size:13px;margin:10px 0 5px}
-  input,textarea,select{width:100%;box-sizing:border-box;background:#0c1325;color:#eef3ff;border:1px solid #263653;border-radius:12px;padding:10px;font-size:14px}
-  textarea{min-height:130px;resize:vertical}
-  button{border:0;border-radius:12px;padding:11px 14px;font-weight:800;cursor:pointer;background:#7aa2ff;color:#071024}
-  button.secondary{background:#263653;color:#eef3ff}
-  button.danger{background:#5b2332;color:#ffe3ea}
-  .row{display:flex;gap:8px;align-items:center;margin-top:8px}
-  .row button{flex:0 0 auto}
-  pre{white-space:pre-wrap;background:#080d19;border:1px solid #263653;border-radius:14px;padding:12px;min-height:150px;overflow:auto}
-  .bigTitle{font-size:19px;font-weight:900;color:#ffd166;margin-bottom:8px}
-  .status{color:#56d364;font-size:13px;margin-top:8px;min-height:18px}
-  .tokens{display:flex;gap:10px;margin-top:8px;color:#9aa9c7;font-size:13px}
-  @media(max-width:900px){.grid{grid-template-columns:1fr}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMD & Claude Panel</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 1600px;
+      margin: 0 auto;
+      height: calc(100vh - 40px);
+    }
+
+    .panel {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .panel-title::before {
+      content: '';
+      width: 8px;
+      height: 32px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 4px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #555;
+      font-size: 14px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      transition: border-color 0.3s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .button-group {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      padding: 14px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+
+    .btn-warning {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+      color: white;
+    }
+
+    .btn-info {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      color: white;
+    }
+
+    .cwd-display {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 6px;
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+
+    .output-area {
+      flex: 1;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      line-height: 1.6;
+    }
+
+    .output-area::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .output-area::-webkit-scrollbar-track {
+      background: #2d2d2d;
+      border-radius: 4px;
+    }
+
+    .output-area::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 4px;
+    }
+
+    .chat-history {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .chat-message {
+      margin-bottom: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      line-height: 1.6;
+    }
+
+    .chat-message.user {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+    }
+
+    .chat-message.assistant {
+      background: #f3e5f5;
+      border-left: 4px solid #9c27b0;
+    }
+
+    .chat-message.error {
+      background: #ffebee;
+      border-left: 4px solid #f44336;
+    }
+
+    .chat-message strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      opacity: 0.7;
+    }
+
+    .token-display {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .token-box {
+      background: #f5f5f5;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .token-box label {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .token-box .value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    @media (max-width: 1024px) {
+      .container {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+
+      .panel {
+        min-height: 600px;
+      }
+    }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Claude Proxy Panel, bản CMD thấy ngay</h1>
+  <div class="container">
+    <!-- CMD TERMINAL PANEL -->
+    <div class="panel">
+      <div class="panel-title">CMD TERMINAL</div>
 
-  <div class="grid">
-    <div class="box cmdBox">
-      <div class="bigTitle">CMD / TERMINAL TRONG UI</div>
-
-      <label>Thư mục thao tác</label>
-      <div class="row">
-        <input id="cwd" placeholder="Ví dụ F:\1_A_Disk_D\Tool\sanbox\release\V-0">
-        <button class="secondary" id="pickFolder">CHỌN THƯ MỤC</button>
+      <div class="form-group">
+        <label>Thư mục làm việc:</label>
+        <div class="cwd-display" id="cwdDisplay">Chưa chọn thư mục</div>
       </div>
 
-      <label>Lệnh CMD</label>
-      <textarea id="cmd">dir</textarea>
-
-      <div class="row">
-        <button id="runCmd">CHẠY CMD</button>
-        <button class="secondary" id="copyCmd">COPY LỆNH</button>
-        <button class="secondary" id="copyOut">COPY OUTPUT</button>
-        <button class="danger" id="clearOut">XÓA OUTPUT</button>
+      <div class="button-group">
+        <button class="btn-info" onclick="pickFolder()">📁 CHỌN THƯ MỤC</button>
+        <button class="btn-success" onclick="runCommand()">▶ CHẠY CMD</button>
+        <button class="btn-warning" onclick="copyOutput()">📋 COPY OUTPUT</button>
+        <button class="btn-danger" onclick="clearOutput()">🗑 XÓA OUTPUT</button>
       </div>
 
-      <div class="status" id="cmdStatus"></div>
-      <label>Output CMD</label>
-      <pre id="cmdOut">Chưa chạy lệnh.</pre>
+      <div class="form-group">
+        <label>Lệnh CMD:</label>
+        <textarea id="cmdInput" placeholder="Nhập lệnh CMD...&#10;Ví dụ:&#10;dir&#10;node -v&#10;git status"></textarea>
+      </div>
+
+      <label>Kết quả:</label>
+      <pre class="output-area" id="cmdOutput">Sẵn sàng chạy lệnh...</pre>
     </div>
 
-    <div class="box">
-      <div class="bigTitle" style="color:#7aa2ff">CHAT CLAUDE NHẸ</div>
+    <!-- CLAUDE CHAT PANEL -->
+    <div class="panel">
+      <div class="panel-title">CLAUDE CHAT</div>
 
-      <label>Base URL</label>
-      <input id="baseUrl" value="https://unlimited.aiprimetech.io">
-
-      <label>Token</label>
-      <input id="token" type="password" placeholder="Dán token">
-
-      <label>Model</label>
-      <select id="model">
-        <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001</option>
-        <option value="claude-3-7-sonnet-20250219">claude-3-7-sonnet-20250219</option>
-        <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
-      </select>
-
-      <label>Prompt</label>
-      <textarea id="prompt">ping</textarea>
-
-      <div class="row">
-        <button id="sendChat">GỬI CLAUDE</button>
-        <button class="secondary" id="copyReply">COPY REPLY</button>
-        <button class="secondary" id="copyAll">COPY TOÀN BỘ</button>
+      <div class="form-group">
+        <label>API Token:</label>
+        <input type="password" id="tokenInput" placeholder="Nhập API token của bạn...">
       </div>
 
-      <div class="tokens">
-        <div>Input: <b id="inTok">0</b></div>
-        <div>Output: <b id="outTok">0</b></div>
+      <div class="form-group">
+        <label>Model:</label>
+        <select id="modelSelect">
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Nhanh, rẻ)</option>
+          <option value="claude-3-5-sonnet-20241022">Claude Sonnet 3.5 (Cân bằng)</option>
+          <option value="claude-3-opus-20240229">Claude Opus 3 (Mạnh nhất)</option>
+        </select>
       </div>
 
-      <div class="status" id="chatStatus"></div>
-      <label>Reply</label>
-      <pre id="reply">Chưa gửi.</pre>
+      <div class="token-display">
+        <div class="token-box">
+          <label>Input Tokens</label>
+          <div class="value" id="inputTokens">0</div>
+        </div>
+        <div class="token-box">
+          <label>Output Tokens</label>
+          <div class="value" id="outputTokens">0</div>
+        </div>
+      </div>
+
+      <div class="chat-history" id="chatHistory">
+        <div class="chat-message assistant">
+          <strong>Claude</strong>
+          Xin chào! Tôi có thể giúp gì cho bạn?
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Prompt:</label>
+        <textarea id="promptInput" placeholder="Nhập câu hỏi hoặc yêu cầu..."></textarea>
+      </div>
+
+      <div class="button-group">
+        <button class="btn-primary" onclick="sendToClaude()">🚀 GỬI CLAUDE</button>
+        <button class="btn-success" onclick="copyReply()">📋 COPY REPLY</button>
+        <button class="btn-warning" onclick="copyAll()">📋 COPY TOÀN BỘ</button>
+        <button class="btn-danger" onclick="clearChat()">🗑 XÓA CHAT</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script>
-const $ = id => document.getElementById(id);
-let lastCmdOut = "";
-let lastReply = "";
+  <script>
+    // Global state
+    let currentCwd = '';
+    let lastReply = '';
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
 
-function saveLocal(){
-  localStorage.setItem("panel_cwd", $("cwd").value);
-  localStorage.setItem("panel_baseUrl", $("baseUrl").value);
-  localStorage.setItem("panel_model", $("model").value);
-}
-function loadLocal(){
-  $("cwd").value = localStorage.getItem("panel_cwd") || "";
-  $("baseUrl").value = localStorage.getItem("panel_baseUrl") || $("baseUrl").value;
-  $("model").value = localStorage.getItem("panel_model") || $("model").value;
-}
-async function post(url, body){
-  const r = await fetch(url, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(body||{})});
-  const data = await r.json();
-  if(!r.ok || data.ok === false) throw new Error(data.error || "Lỗi");
-  return data;
-}
-function dangerous(cmd){
-  return /git\s+push|deploy|rm\s+-rf|del\s+\/s|format\s|type\s+\.env|cat\s+\.env/i.test(cmd);
-}
-
-$("pickFolder").onclick = async () => {
-  $("cmdStatus").textContent = "Đang mở chọn thư mục...";
-  try {
-    const data = await post("/api/pick-folder", {});
-    if(data.folder){
-      $("cwd").value = data.folder;
-      saveLocal();
-      $("cmdStatus").textContent = "Đã chọn: " + data.folder;
-    } else {
-      $("cmdStatus").textContent = "Không chọn thư mục.";
+    // CMD Terminal functions
+    async function pickFolder() {
+      try {
+        const res = await fetch('/api/pick-folder', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok && data.folder) {
+          currentCwd = data.folder;
+          document.getElementById('cwdDisplay').textContent = currentCwd;
+        }
+      } catch (err) {
+        alert('Lỗi khi chọn thư mục: ' + err.message);
+      }
     }
-  } catch(e) {
-    $("cmdStatus").textContent = "Lỗi chọn thư mục: " + e.message;
-  }
-};
 
-$("runCmd").onclick = async () => {
-  const command = $("cmd").value.trim();
-  if(!command){ $("cmdStatus").textContent = "Chưa nhập lệnh."; return; }
-  if(dangerous(command) && !confirm("Lệnh có vẻ nguy hiểm. Chạy tiếp không?")) return;
+    async function runCommand() {
+      const command = document.getElementById('cmdInput').value.trim();
+      if (!command) {
+        alert('Vui lòng nhập lệnh CMD');
+        return;
+      }
 
-  saveLocal();
-  $("cmdStatus").textContent = "Đang chạy CMD...";
-  $("cmdOut").textContent = "Đang chạy...";
-  try {
-    const data = await post("/api/cmd", {cwd:$("cwd").value.trim(), command});
-    lastCmdOut =
-      "CWD: " + data.cwd + "\n" +
-      "COMMAND: " + data.command + "\n" +
-      "EXIT: " + data.exitCode + "\n\n" +
-      "STDOUT:\n" + (data.stdout || "") + "\n\n" +
-      "STDERR:\n" + (data.stderr || "");
-    $("cmdOut").textContent = lastCmdOut;
-    $("cmdStatus").textContent = data.ok ? "CMD chạy xong OK." : "CMD chạy xong nhưng có lỗi.";
-  } catch(e) {
-    lastCmdOut = "ERROR: " + e.message;
-    $("cmdOut").textContent = lastCmdOut;
-    $("cmdStatus").textContent = "Lỗi CMD.";
-  }
-};
+      const outputEl = document.getElementById('cmdOutput');
+      outputEl.textContent = 'Đang chạy lệnh...\n';
 
-$("copyCmd").onclick = () => navigator.clipboard.writeText($("cmd").value);
-$("copyOut").onclick = () => navigator.clipboard.writeText(lastCmdOut || $("cmdOut").textContent);
-$("clearOut").onclick = () => { lastCmdOut=""; $("cmdOut").textContent="Đã xóa output."; };
+      try {
+        const res = await fetch('/api/cmd', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cwd: currentCwd, command })
+        });
+        const data = await res.json();
 
-$("sendChat").onclick = async () => {
-  const prompt = $("prompt").value.trim();
-  if(!prompt){ $("chatStatus").textContent = "Chưa nhập prompt."; return; }
+        let output = '';
+        if (data.stdout) {
+          output += data.stdout;
+        }
+        if (data.stderr) {
+          output += '\n[STDERR]\n' + data.stderr;
+        }
+        output += '\n[EXIT CODE: ' + data.exitCode + ']';
+        output += '\n[CWD: ' + data.cwd + ']';
 
-  $("prompt").value = "";
-  $("chatStatus").textContent = "Đang gửi Claude...";
-  $("reply").textContent = "Đang chờ...";
-  saveLocal();
+        outputEl.textContent = output;
+      } catch (err) {
+        outputEl.textContent = 'LỖI: ' + err.message;
+      }
+    }
 
-  try {
-    const data = await post("/api/chat", {
-      baseUrl:$("baseUrl").value.trim(),
-      token:$("token").value.trim(),
-      model:$("model").value,
-      maxTokens:800,
-      prompt
+    function copyOutput() {
+      const output = document.getElementById('cmdOutput').textContent;
+      navigator.clipboard.writeText(output).then(() => {
+        alert('Đã copy output!');
+      });
+    }
+
+    function clearOutput() {
+      document.getElementById('cmdOutput').textContent = 'Sẵn sàng chạy lệnh...';
+    }
+
+    // Claude Chat functions
+    async function sendToClaude() {
+      const token = document.getElementById('tokenInput').value.trim();
+      const model = document.getElementById('modelSelect').value;
+      const prompt = document.getElementById('promptInput').value.trim();
+
+      if (!token) {
+        alert('Vui lòng nhập API token');
+        return;
+      }
+      if (!prompt) {
+        alert('Vui lòng nhập prompt');
+        return;
+      }
+
+      // Add user message to chat
+      addChatMessage('user', prompt);
+      document.getElementById('promptInput').value = '';
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            baseUrl: 'https://unlimited.aiprimetech.io',
+            token,
+            model,
+            prompt,
+            maxTokens: 800
+          })
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+          lastReply = data.reply;
+          addChatMessage('assistant', data.reply);
+          
+          // Update token counts
+          if (data.usage) {
+            totalInputTokens += data.usage.input_tokens || 0;
+            totalOutputTokens += data.usage.output_tokens || 0;
+            document.getElementById('inputTokens').textContent = totalInputTokens;
+            document.getElementById('outputTokens').textContent = totalOutputTokens;
+          }
+        } else {
+          addChatMessage('error', 'LỖI: ' + (data.error || 'Không có phản hồi'));
+        }
+      } catch (err) {
+        addChatMessage('error', 'LỖI KẾT NỐI: ' + err.message);
+      }
+    }
+
+    function addChatMessage(role, content) {
+      const chatHistory = document.getElementById('chatHistory');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'chat-message ' + role;
+      
+      const label = role === 'user' ? 'Bạn' : role === 'assistant' ? 'Claude' : 'Lỗi';
+      messageDiv.innerHTML = '<strong>' + label + '</strong>' + escapeHtml(content);
+      
+      chatHistory.appendChild(messageDiv);
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function copyReply() {
+      if (!lastReply) {
+        alert('Chưa có reply nào để copy');
+        return;
+      }
+      navigator.clipboard.writeText(lastReply).then(() => {
+        alert('Đã copy reply!');
+      });
+    }
+
+    function copyAll() {
+      const chatHistory = document.getElementById('chatHistory');
+      const messages = chatHistory.querySelectorAll('.chat-message');
+      let text = '';
+      
+      messages.forEach(msg => {
+        const label = msg.querySelector('strong').textContent;
+        const content = msg.textContent.replace(label, '').trim();
+        text += label + '\n' + content + '\n\n';
+      });
+
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Đã copy toàn bộ chat!');
+      });
+    }
+
+    function clearChat() {
+      document.getElementById('chatHistory').innerHTML = '';
+      lastReply = '';
+      totalInputTokens = 0;
+      totalOutputTokens = 0;
+      document.getElementById('inputTokens').textContent = '0';
+      document.getElementById('outputTokens').textContent = '0';
+    }
+
+    // Keyboard shortcuts
+    document.getElementById('cmdInput').addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        runCommand();
+      }
     });
-    lastReply = data.reply || "";
-    $("reply").textContent = lastReply;
-    $("inTok").textContent = data.usage?.input_tokens || 0;
-    $("outTok").textContent = data.usage?.output_tokens || 0;
-    $("chatStatus").textContent = "Claude trả lời xong.";
-  } catch(e) {
-    lastReply = "ERROR: " + e.message;
-    $("reply").textContent = lastReply;
-    $("chatStatus").textContent = "Lỗi Claude.";
-  }
-};
 
-$("copyReply").onclick = () => navigator.clipboard.writeText(lastReply || $("reply").textContent);
-$("copyAll").onclick = () => {
-  const text =
-    "### CMD OUTPUT\n" + $("cmdOut").textContent + "\n\n" +
-    "### CLAUDE REPLY\n" + $("reply").textContent;
-  navigator.clipboard.writeText(text);
-};
-
-loadLocal();
-</script>
+    document.getElementById('promptInput').addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        sendToClaude();
+      }
+    });
+  </script>
 </body>
 </html>

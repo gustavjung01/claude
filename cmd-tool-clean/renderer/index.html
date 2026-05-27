@@ -1,0 +1,302 @@
+﻿<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <title>Local CMD Tool</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #0b1020;
+      color: #eef3ff;
+      font-family: Segoe UI, Arial, sans-serif;
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 300px 1fr 360px;
+      height: 100vh;
+    }
+    .side, .right {
+      background: #1f1f23;
+      border-right: 1px solid #3b3b42;
+      padding: 16px;
+      overflow: auto;
+    }
+    .right {
+      border-right: 0;
+      border-left: 1px solid #3b3b42;
+    }
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-width: 0;
+      background: #111;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      letter-spacing: .5px;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: #1473b7;
+      color: white;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button.gray { background: #3a3a40; }
+    button.red { background: #733040; }
+    button.big {
+      font-size: 16px;
+      padding: 14px 18px;
+    }
+    input, textarea {
+      width: 100%;
+      background: #303033;
+      color: #f5f5f5;
+      border: 1px solid #4a4a50;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 14px;
+      outline: none;
+    }
+    textarea {
+      resize: vertical;
+      line-height: 1.5;
+    }
+    label {
+      display: block;
+      color: #a9a9b3;
+      font-size: 13px;
+      margin: 12px 0 6px;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .cwd {
+      font-size: 12px;
+      color: #bfc7d5;
+      word-break: break-all;
+      padding: 10px 0;
+    }
+    .fileList {
+      margin-top: 12px;
+      border-top: 1px solid #3b3b42;
+      padding-top: 10px;
+    }
+    .file {
+      padding: 7px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #e8e8ee;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .file:hover { background: #2b2b31; }
+    .terminalTop {
+      background: #222226;
+      border-bottom: 1px solid #3b3b42;
+      padding: 16px;
+    }
+    .cmdArea {
+      min-height: 135px;
+      font-family: Consolas, monospace;
+      font-size: 15px;
+    }
+    .output {
+      margin: 0;
+      padding: 18px;
+      white-space: pre-wrap;
+      overflow: auto;
+      font-family: Consolas, monospace;
+      font-size: 14px;
+      color: #f2f2f2;
+      background: #050505;
+    }
+    .status {
+      color: #7ee787;
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 18px;
+    }
+    .preview {
+      background: #111;
+      border: 1px solid #3b3b42;
+      border-radius: 8px;
+      padding: 12px;
+      white-space: pre-wrap;
+      overflow: auto;
+      max-height: 55vh;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+    }
+    .hint {
+      color: #a9a9b3;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <h2>WORKSPACE</h2>
+      <button id="selectFolder" class="big" style="width:100%">📁 SELECT FOLDER</button>
+      <div id="cwdText" class="cwd">Chưa chọn thư mục.</div>
+      <div class="fileList" id="fileList"></div>
+    </aside>
+
+    <main class="main">
+      <div class="terminalTop">
+        <h2>CMD TERMINAL</h2>
+        <label>CMD COMMAND</label>
+        <textarea id="cmdInput" class="cmdArea" placeholder="Nhập lệnh ở đây, ví dụ: dir, node -v, git status --short">dir</textarea>
+        <div class="row">
+          <button id="runCmd" class="big">▶ RUN CMD</button>
+          <button id="stopCmd" class="gray big">■ STOP</button>
+          <button id="copyOutput" class="gray big">📋 COPY OUTPUT</button>
+          <button id="clearOutput" class="red big">🧹 CLEAR</button>
+        </div>
+        <div id="status" class="status">Sẵn sàng. Tool này không gọi Claude, không tốn token.</div>
+      </div>
+      <pre id="output" class="output">Ready...</pre>
+    </main>
+
+    <aside class="right">
+      <h2>FILE PREVIEW</h2>
+      <div class="hint">
+        Chọn folder bên trái, bấm file để xem nhanh. Không tự gửi đi đâu cả.
+      </div>
+      <label>Preview</label>
+      <pre id="preview" class="preview">Chưa chọn file.</pre>
+    </aside>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let currentFolder = "";
+let lastOutput = "";
+
+function setStatus(text) {
+  $("status").textContent = text;
+}
+
+function appendOutput(text) {
+  lastOutput += text;
+  $("output").textContent = lastOutput;
+  $("output").scrollTop = $("output").scrollHeight;
+}
+
+function dangerous(cmd) {
+  return /git\s+push|deploy|rm\s+-rf|del\s+\/s|format\s|type\s+\.env|cat\s+\.env/i.test(cmd);
+}
+
+async function loadFiles() {
+  if (!currentFolder) return;
+  const files = await window.cmdTool.listFiles(currentFolder);
+  const box = $("fileList");
+  box.innerHTML = "";
+
+  if (!files.length) {
+    box.innerHTML = "<div class='hint'>Không có file text nhẹ để hiển thị.</div>";
+    return;
+  }
+
+  for (const f of files) {
+    const div = document.createElement("div");
+    div.className = "file";
+    div.textContent = "📄 " + f.rel;
+    div.onclick = async () => {
+      try {
+        const text = await window.cmdTool.readFile({ folder: currentFolder, rel: f.rel });
+        $("preview").textContent = text;
+      } catch (e) {
+        $("preview").textContent = "Lỗi đọc file: " + e.message;
+      }
+    };
+    box.appendChild(div);
+  }
+}
+
+$("selectFolder").onclick = async () => {
+  const folder = await window.cmdTool.selectFolder();
+  if (!folder) return;
+
+  currentFolder = folder;
+  $("cwdText").textContent = folder;
+  localStorage.setItem("cmd_tool_folder", folder);
+  setStatus("Đã chọn thư mục.");
+  await loadFiles();
+};
+
+$("runCmd").onclick = async () => {
+  const command = $("cmdInput").value.trim();
+  if (!command) {
+    setStatus("Chưa nhập lệnh.");
+    return;
+  }
+
+  if (dangerous(command) && !confirm("Lệnh có vẻ nguy hiểm. Chạy tiếp không?")) return;
+
+  lastOutput = "";
+  $("output").textContent = "Running...\n";
+  setStatus("Đang chạy CMD...");
+
+  const result = await window.cmdTool.runCmd({
+    cwd: currentFolder,
+    command
+  });
+
+  lastOutput =
+    "CWD: " + result.cwd + "\n" +
+    "COMMAND: " + result.command + "\n" +
+    "EXIT: " + result.exitCode + "\n\n" +
+    "STDOUT:\n" + (result.stdout || "") + "\n\n" +
+    "STDERR:\n" + (result.stderr || "");
+
+  $("output").textContent = lastOutput;
+  setStatus(result.ok ? "CMD chạy xong OK." : "CMD chạy xong, có lỗi.");
+};
+
+$("stopCmd").onclick = async () => {
+  await window.cmdTool.stopCmd();
+  setStatus("Đã gửi lệnh STOP.");
+};
+
+$("copyOutput").onclick = async () => {
+  await navigator.clipboard.writeText(lastOutput || $("output").textContent);
+  setStatus("Đã copy output.");
+};
+
+$("clearOutput").onclick = () => {
+  lastOutput = "";
+  $("output").textContent = "Cleared.";
+  setStatus("Đã xóa output.");
+};
+
+$("cmdInput").addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "Enter") $("runCmd").click();
+});
+
+window.cmdTool.onCmdOutput(data => {
+  appendOutput(data.text || "");
+});
+
+const savedFolder = localStorage.getItem("cmd_tool_folder");
+if (savedFolder) {
+  currentFolder = savedFolder;
+  $("cwdText").textContent = savedFolder;
+  loadFiles().catch(() => {});
+}
+
+setTimeout(() => $("cmdInput").focus(), 300);
+</script>
+</body>
+</html>
