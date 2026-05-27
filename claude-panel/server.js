@@ -1,7 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync, exec } = require("child_process");
 
 const PORT = Number(process.env.PORT || 8787);
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -150,6 +150,42 @@ if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   return (result.stdout || "").trim();
 }
 
+function validateCwd(cwd) {
+  if (!cwd || typeof cwd !== "string") {
+    throw new Error("Thiếu thư mục làm việc (cwd)");
+  }
+  
+  const resolved = path.resolve(cwd);
+  if (!fs.existsSync(resolved)) {
+    throw new Error("Thư mục không tồn tại: " + cwd);
+  }
+  if (!fs.statSync(resolved).isDirectory()) {
+    throw new Error("Đường dẫn không phải thư mục: " + cwd);
+  }
+  
+  return resolved;
+}
+
+function runTerminalCommand(cwd, command) {
+  return new Promise((resolve) => {
+    exec(command, {
+      cwd: cwd,
+      timeout: 60000,
+      maxBuffer: 1024 * 1024,
+      shell: "cmd.exe"
+    }, (error, stdout, stderr) => {
+      resolve({
+        ok: !error,
+        stdout: stdout || "",
+        stderr: stderr || "",
+        exitCode: error ? error.code : 0,
+        command: command,
+        cwd: cwd
+      });
+    });
+  });
+}
+
 function extractText(content) {
   if (!Array.isArray(content)) return "";
   return content
@@ -258,6 +294,24 @@ const server = http.createServer(async (req, res) => {
       const payload = await readJson(req);
       const result = await callClaude(payload);
       return send(res, 200, result);
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/terminal/run") {
+      const payload = await readJson(req);
+      const command = String(payload.command || "").trim();
+      const cwd = String(payload.cwd || "").trim();
+      
+      if (!command) {
+        return send(res, 400, { ok: false, error: "Thiếu command" });
+      }
+      
+      try {
+        const validatedCwd = validateCwd(cwd || __dirname);
+        const result = await runTerminalCommand(validatedCwd, command);
+        return send(res, 200, result);
+      } catch (err) {
+        return send(res, 400, { ok: false, error: err.message || String(err) });
+      }
     }
 
     let filePath = url.pathname === "/" ? "index.html" : url.pathname.replace(/^\/+/, "");

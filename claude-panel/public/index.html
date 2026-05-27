@@ -27,6 +27,15 @@
     .files{max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:8px;background:#0c1325;margin-top:8px}
     .file{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);padding:4px 0}.file input{width:auto}.file span{word-break:break-all}
     .mini{font-size:12px;color:var(--muted)}
+    .tabs{display:flex;gap:4px;margin-bottom:12px}
+    .tab{padding:8px 16px;background:#263653;color:var(--text);border:0;border-radius:12px 12px 0 0;cursor:pointer;font-weight:600}
+    .tab.active{background:var(--blue);color:#071024}
+    .tab-content{display:none}.tab-content.active{display:block}
+    .terminal-output{background:#0a0e1a;border:1px solid var(--line);border-radius:12px;padding:12px;font-family:'Courier New',monospace;font-size:13px;min-height:300px;max-height:500px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+    .terminal-output .stdout{color:var(--green)}
+    .terminal-output .stderr{color:var(--red)}
+    .terminal-output .info{color:var(--muted);font-style:italic}
+    .terminal-cmd{font-family:'Courier New',monospace}
     @media(max-width:950px){.app{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.toolbar{grid-template-columns:1fr}}
   </style>
 </head>
@@ -89,6 +98,12 @@
   </aside>
 
   <main>
+    <div class="tabs">
+      <button class="tab active" data-tab="chat">Chat</button>
+      <button class="tab" data-tab="terminal">Terminal</button>
+    </div>
+
+    <div id="chat-tab" class="tab-content active">
     <section class="cards">
       <div class="card"><div class="k">Requests</div><div class="v" id="reqCount">0</div></div>
       <div class="card"><div class="k">Input tokens</div><div class="v" id="inTok">0</div></div>
@@ -116,6 +131,35 @@
       <button class="secondary" id="copyFullBtn">Copy toàn bộ</button>
       <button class="secondary" id="saveBtn">Lưu cấu hình</button>
     </section>
+    </div>
+
+    <div id="terminal-tab" class="tab-content">
+      <section class="cards">
+        <div class="card"><div class="k">Commands</div><div class="v" id="cmdCount">0</div></div>
+        <div class="card"><div class="k">Success</div><div class="v" id="cmdSuccess" style="color:var(--green)">0</div></div>
+        <div class="card"><div class="k">Failed</div><div class="v" id="cmdFailed" style="color:var(--red)">0</div></div>
+        <div class="card"><div class="k">Last exit</div><div class="v" id="cmdExit">-</div></div>
+      </section>
+
+      <label>Thư mục làm việc (cwd)</label>
+      <input id="termCwd" class="terminal-cmd" placeholder="Tự động lấy từ Thư mục thao tác" />
+
+      <label>Command</label>
+      <textarea id="termCmd" class="terminal-cmd" placeholder="Nhập lệnh CMD/Terminal... (Ctrl+Enter để chạy)" style="min-height:80px"></textarea>
+
+      <div style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="runCmdBtn" style="background:var(--green);color:#071024">▶ Run</button>
+        <button class="secondary" id="copyCmdBtn">Copy command</button>
+        <button class="secondary" id="copyOutputBtn">Copy output</button>
+        <button class="secondary" id="clearOutputBtn">Clear output</button>
+        <button class="secondary" id="pasteReplyBtn">Dán reply Claude</button>
+      </div>
+
+      <label>Output</label>
+      <div id="termOutput" class="terminal-output">
+        <div class="info">Sẵn sàng chạy lệnh. Nhập command ở trên và bấm Run hoặc Ctrl+Enter.</div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -349,6 +393,147 @@ document.querySelectorAll(".preset-btn").forEach(btn => {
       promptBox.focus();
     }
   });
+});
+
+// Tab switching
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    tab.classList.add("active");
+    $(tab.dataset.tab + "-tab").classList.add("active");
+  });
+});
+
+// Terminal functionality
+let termStats = { count: 0, success: 0, failed: 0, lastExit: "-" };
+
+const DANGEROUS_PATTERNS = [
+  /git\s+push/i,
+  /deploy/i,
+  /rm\s+-rf/i,
+  /del\s+\/s/i,
+  /format/i,
+  /type\s+\.env/i,
+  /cat\s+\.env/i
+];
+
+function isDangerousCommand(cmd) {
+  return DANGEROUS_PATTERNS.some(pattern => pattern.test(cmd));
+}
+
+function updateTermStats() {
+  $("cmdCount").textContent = termStats.count;
+  $("cmdSuccess").textContent = termStats.success;
+  $("cmdFailed").textContent = termStats.failed;
+  $("cmdExit").textContent = termStats.lastExit;
+}
+
+function appendOutput(text, type = "stdout") {
+  const output = $("termOutput");
+  const div = document.createElement("div");
+  div.className = type;
+  div.textContent = text;
+  output.appendChild(div);
+  output.scrollTop = output.scrollHeight;
+}
+
+async function runTerminalCommand() {
+  const cmd = $("termCmd").value.trim();
+  const cwd = $("termCwd").value.trim() || $("workspacePath").value.trim();
+
+  if (!cmd) {
+    appendOutput("Lỗi: Thiếu command", "stderr");
+    return;
+  }
+
+  if (!cwd) {
+    appendOutput("Lỗi: Thiếu thư mục làm việc. Vui lòng chọn thư mục hoặc nhập cwd.", "stderr");
+    return;
+  }
+
+  // Safety check
+  if (isDangerousCommand(cmd)) {
+    const confirmed = confirm(
+      "⚠️ CẢNH BÁO: Command này có thể nguy hiểm!\n\n" +
+      "Command: " + cmd + "\n\n" +
+      "Bạn có chắc chắn muốn chạy không?"
+    );
+    if (!confirmed) {
+      appendOutput("Đã hủy command: " + cmd, "info");
+      return;
+    }
+  }
+
+  appendOutput("$ " + cmd, "info");
+  setStatus("Đang chạy command...", "warn");
+
+  try {
+    const data = await api("/api/terminal/run", { command: cmd, cwd: cwd });
+    
+    if (data.stdout) appendOutput(data.stdout, "stdout");
+    if (data.stderr) appendOutput(data.stderr, "stderr");
+    
+    termStats.count++;
+    if (data.ok) {
+      termStats.success++;
+      termStats.lastExit = "0";
+      setStatus("Command chạy thành công", "ok");
+    } else {
+      termStats.failed++;
+      termStats.lastExit = data.exitCode || "?";
+      setStatus("Command thất bại với exit code: " + termStats.lastExit, "");
+    }
+    
+    updateTermStats();
+  } catch (err) {
+    appendOutput("Lỗi: " + (err.message || String(err)), "stderr");
+    termStats.count++;
+    termStats.failed++;
+    termStats.lastExit = "err";
+    updateTermStats();
+    setStatus("Lỗi khi chạy command: " + (err.message || String(err)), "");
+  }
+}
+
+$("runCmdBtn").onclick = runTerminalCommand;
+
+$("copyCmdBtn").onclick = () => {
+  const cmd = $("termCmd").value;
+  copyText(cmd, "Đã copy command");
+};
+
+$("copyOutputBtn").onclick = () => {
+  const output = $("termOutput").innerText;
+  copyText(output, "Đã copy output");
+};
+
+$("clearOutputBtn").onclick = () => {
+  $("termOutput").innerHTML = '<div class="info">Đã xóa output.</div>';
+};
+
+$("pasteReplyBtn").onclick = () => {
+  if (lastReply) {
+    $("termCmd").value = lastReply;
+    setStatus("Đã dán reply Claude vào command", "ok");
+  } else {
+    setStatus("Chưa có reply nào để dán", "warn");
+  }
+};
+
+$("termCmd").addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "Enter") {
+    e.preventDefault();
+    runTerminalCommand();
+  }
+});
+
+// Auto-sync cwd from workspacePath
+$("workspacePath").addEventListener("change", () => {
+  const wsPath = $("workspacePath").value.trim();
+  if (wsPath && !$("termCwd").value.trim()) {
+    $("termCwd").value = wsPath;
+  }
 });
 
 loadConfig();
