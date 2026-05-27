@@ -563,6 +563,7 @@ function updateTerminalStatus(model, cwd) {
 }
 
 $("startModelBtn").onclick = async () => {
+  console.log('[UI] startModelBtn clicked');
   const model = effectiveModel();
   const baseUrl = $("baseUrl").value.trim();
   const token = $("aiToken").value.trim();
@@ -594,6 +595,7 @@ $("startModelBtn").onclick = async () => {
 };
 
 $("stopModelBtn").onclick = async () => {
+  console.log('[UI] stopModelBtn clicked');
   await window.modelTerminal.stop();
   terminalStarted = false;
   updateTerminalStatus('', '');
@@ -602,6 +604,7 @@ $("stopModelBtn").onclick = async () => {
 };
 
 $("clearTerminalBtn").onclick = async () => {
+  console.log('[UI] clearTerminalBtn clicked');
   if (xtermInstance) {
     xtermInstance.clear();
   } else {
@@ -611,6 +614,7 @@ $("clearTerminalBtn").onclick = async () => {
 };
 
 $("copyTerminalBtn").onclick = async () => {
+  console.log('[UI] copyTerminalBtn clicked');
   try {
     await navigator.clipboard.writeText(terminalAccum || $("terminal").textContent);
     setStatus('Terminal output copied.');
@@ -618,6 +622,32 @@ $("copyTerminalBtn").onclick = async () => {
     setStatus('Copy failed: ' + e.message, 'bad');
   }
 };
+
+// Map top-center buttons (older ids) to right-column handlers and log clicks
+const mapButton = (fromId, toId) => {
+  const el = $(fromId);
+  if (!el) return;
+  el.onclick = () => {
+    console.log('[UI] ' + fromId + ' clicked');
+    const target = $(toId);
+    if (target) target.click();
+  };
+};
+
+mapButton('startModel', 'startModelBtn');
+mapButton('stopModel', 'stopModelBtn');
+mapButton('clearModel', 'clearTerminalBtn');
+mapButton('copyModelOutput', 'copyTerminalBtn');
+
+// Ensure select folder button logs
+const sel = $('selectFolder');
+if (sel) {
+  const old = sel.onclick;
+  sel.onclick = async () => {
+    console.log('[UI] selectFolder clicked');
+    if (typeof old === 'function') return old();
+  };
+}
 
 createModelChips();
 
