@@ -9,7 +9,5 @@ contextBridge.exposeInMainWorld("cmdTool", {
   onCmdOutput: (callback) => {
     ipcRenderer.removeAllListeners("cmd-output");
     ipcRenderer.on("cmd-output", (_event, data) => callback(data));
-  },
-  loadModels: (payload) => ipcRenderer.invoke("ai-load-models", payload),
-  aiChat: (payload) => ipcRenderer.invoke("ai-chat", payload)
+  }
 });
