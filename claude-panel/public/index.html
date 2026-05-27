@@ -1,542 +1,205 @@
 ﻿<!doctype html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Claude Proxy Panel V-1</title>
-  <style>
-    :root{--bg:#0b1020;--panel:#121a2f;--text:#edf3ff;--muted:#9aa9c7;--line:#263653;--green:#56d364;--red:#ff6b6b;--yellow:#ffd166;--blue:#7aa2ff}
-    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top left,#1d2a52 0,#0b1020 42%);color:var(--text);font-family:Segoe UI,Arial,sans-serif}
-    .app{display:grid;grid-template-columns:330px 1fr;min-height:100vh}
-    aside{background:rgba(18,26,47,.96);border-right:1px solid var(--line);padding:16px;overflow:auto}
-    main{padding:16px;display:grid;grid-template-rows:auto 1fr auto;gap:12px}
-    h1{font-size:20px;margin:0 0 6px}.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
-    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px}
-    input,textarea,select{width:100%;background:#0c1325;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:9px 10px;outline:none;font-size:14px}
-    textarea{resize:vertical;min-height:130px;line-height:1.45}
-    button{border:0;border-radius:12px;padding:9px 11px;background:var(--blue);color:#071024;font-weight:700;cursor:pointer}
-    button.secondary{background:#263653;color:var(--text)} button.danger{background:#3a1b28;color:#ffd9e1;border:1px solid #74324a}
-    .row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
-    .check{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:12px;margin-top:9px}.check input{width:auto}
-    .cards{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px}
-    .card{background:rgba(18,26,47,.82);border:1px solid var(--line);border-radius:18px;padding:12px}.card .k{color:var(--muted);font-size:12px}.card .v{font-size:21px;font-weight:800;margin-top:4px}
-    .chat{background:rgba(18,26,47,.7);border:1px solid var(--line);border-radius:18px;padding:14px;overflow:auto;min-height:320px}
-    .bubble{border-radius:16px;padding:12px;margin-bottom:12px;white-space:pre-wrap;line-height:1.48}.user{background:#1c2a4c;border:1px solid #30446e}.assistant{background:#111827;border:1px solid #263653}.error{background:#351d28;border:1px solid #7f3b52;color:#ffdce5}
-    .toolbar{display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;align-items:end}
-    .status{margin-top:10px;color:var(--muted);font-size:13px;min-height:20px}.ok{color:var(--green)}.warn{color:var(--yellow)}
-    .files{max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:8px;background:#0c1325;margin-top:8px}
-    .file{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);padding:4px 0}.file input{width:auto}.file span{word-break:break-all}
-    .mini{font-size:12px;color:var(--muted)}
-    .tabs{display:flex;gap:4px;margin-bottom:12px}
-    .tab{padding:8px 16px;background:#263653;color:var(--text);border:0;border-radius:12px 12px 0 0;cursor:pointer;font-weight:600}
-    .tab.active{background:var(--blue);color:#071024}
-    .tab-content{display:none}.tab-content.active{display:block}
-    .terminal-output{background:#0a0e1a;border:1px solid var(--line);border-radius:12px;padding:12px;font-family:'Courier New',monospace;font-size:13px;min-height:300px;max-height:500px;overflow:auto;white-space:pre-wrap;word-break:break-all}
-    .terminal-output .stdout{color:var(--green)}
-    .terminal-output .stderr{color:var(--red)}
-    .terminal-output .info{color:var(--muted);font-style:italic}
-    .terminal-cmd{font-family:'Courier New',monospace}
-    @media(max-width:950px){.app{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.toolbar{grid-template-columns:1fr}}
-  </style>
+<meta charset="utf-8">
+<title>CMD Visible Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body{margin:0;background:#0b1020;color:#eef3ff;font-family:Segoe UI,Arial,sans-serif}
+  .wrap{max-width:1200px;margin:0 auto;padding:18px}
+  h1{margin:0 0 12px;font-size:24px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .box{background:#121a2f;border:2px solid #263653;border-radius:18px;padding:14px}
+  .cmdBox{border-color:#ffd166;box-shadow:0 0 0 2px rgba(255,209,102,.15)}
+  label{display:block;color:#9aa9c7;font-size:13px;margin:10px 0 5px}
+  input,textarea,select{width:100%;box-sizing:border-box;background:#0c1325;color:#eef3ff;border:1px solid #263653;border-radius:12px;padding:10px;font-size:14px}
+  textarea{min-height:130px;resize:vertical}
+  button{border:0;border-radius:12px;padding:11px 14px;font-weight:800;cursor:pointer;background:#7aa2ff;color:#071024}
+  button.secondary{background:#263653;color:#eef3ff}
+  button.danger{background:#5b2332;color:#ffe3ea}
+  .row{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .row button{flex:0 0 auto}
+  pre{white-space:pre-wrap;background:#080d19;border:1px solid #263653;border-radius:14px;padding:12px;min-height:150px;overflow:auto}
+  .bigTitle{font-size:19px;font-weight:900;color:#ffd166;margin-bottom:8px}
+  .status{color:#56d364;font-size:13px;margin-top:8px;min-height:18px}
+  .tokens{display:flex;gap:10px;margin-top:8px;color:#9aa9c7;font-size:13px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-<div class="app">
-  <aside>
-    <h1>Claude Proxy Panel V-1</h1>
-    <div class="sub">Bản nhẹ, đo token thật, không dùng Claude Desktop Cowork.</div>
+<div class="wrap">
+  <h1>Claude Proxy Panel, bản CMD thấy ngay</h1>
 
-    <label>Base URL</label>
-    <input id="baseUrl" value="https://unlimited.aiprimetech.io" />
+  <div class="grid">
+    <div class="box cmdBox">
+      <div class="bigTitle">CMD / TERMINAL TRONG UI</div>
 
-    <label>Token</label>
-    <input id="token" type="password" placeholder="Dán ANTHROPIC_AUTH_TOKEN" />
-
-    <label>Model</label>
-    <select id="model">
-      <option value="claude-haiku-4-5-20251001">Haiku 4.5, tiết kiệm</option>
-      <option value="claude-3-7-sonnet-20250219">Sonnet 3.7, code vừa</option>
-      <option value="claude-3-5-sonnet-20241022">Sonnet 3.5, dự phòng</option>
-    </select>
-
-    <label>Hoặc nhập model ID khác</label>
-    <input id="customModel" placeholder="Dán model ID shop cấp" />
-
-    <div class="row">
-      <div>
-        <label>Max output tokens</label>
-        <input id="maxTokens" type="number" min="20" max="8000" value="800" />
-      </div>
-      <div>
-        <label>Workspace max chars</label>
-        <input id="workspaceMaxChars" type="number" min="1000" max="120000" value="30000" />
-      </div>
-    </div>
-
-    <label>Thư mục thao tác</label>
-    <div class="row">
-      <input id="workspacePath" placeholder="Chọn folder hoặc dán đường dẫn" />
-      <button class="secondary" id="pickFolderBtn" style="flex:0 0 72px">Chọn</button>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button class="secondary" id="loadFilesBtn">Load file</button>
-      <button class="secondary" id="selectNoneBtn">Bỏ chọn</button>
-    </div>
-
-    <label class="check"><input id="includeWorkspace" type="checkbox">Gửi kèm file đã tick</label>
-    <label class="check"><input id="includeHistory" type="checkbox">Gửi kèm lịch sử chat, tốn token hơn</label>
-    <label class="check"><input id="autoClearPrompt" type="checkbox" checked>Auto clear prompt sau khi gửi</label>
-    <label class="check"><input id="autoCopyFull" type="checkbox">Auto copy toàn bộ sau reply</label>
-
-    <div class="files" id="filesBox"><div class="mini">Chưa chọn thư mục.</div></div>
-
-    <div class="row" style="margin-top:12px">
-      <button class="secondary" id="pingBtn">Ping</button>
-      <button class="danger" id="clearBtn">Xóa chat</button>
-    </div>
-
-    <div class="status" id="status"></div>
-  </aside>
-
-  <main>
-    <div class="tabs">
-      <button class="tab active" data-tab="chat">Chat</button>
-      <button class="tab" data-tab="terminal">Terminal</button>
-    </div>
-
-    <div id="chat-tab" class="tab-content active">
-    <section class="cards">
-      <div class="card"><div class="k">Requests</div><div class="v" id="reqCount">0</div></div>
-      <div class="card"><div class="k">Input tokens</div><div class="v" id="inTok">0</div></div>
-      <div class="card"><div class="k">Output tokens</div><div class="v" id="outTok">0</div></div>
-      <div class="card"><div class="k">Last model</div><div class="v" id="lastModel" style="font-size:13px">-</div></div>
-    </section>
-
-    <section class="chat" id="chat">
-      <div class="bubble assistant">Sẵn sàng. Mặc định không gửi lịch sử và không đọc file. Muốn thao tác folder thì chọn thư mục, tick file cần gửi, rồi bật “Gửi kèm file đã tick”.</div>
-    </section>
-
-    <section class="toolbar">
-      <div>
-        <label>Prompt</label>
-        <textarea id="prompt" placeholder="Nhập yêu cầu ở đây...">ping</textarea>
-        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-          <button class="secondary preset-btn" data-preset="no-history" style="flex:0 0 auto;padding:6px 10px;font-size:12px">+ Không đọc lịch sử</button>
-          <button class="secondary preset-btn" data-preset="no-files" style="flex:0 0 auto;padding:6px 10px;font-size:12px">+ Không đọc toàn bộ file</button>
-          <button class="secondary preset-btn" data-preset="suggest-files" style="flex:0 0 auto;padding:6px 10px;font-size:12px">+ Gợi ý file ngoài kế hoạch</button>
-          <button class="secondary preset-btn" data-preset="save-quota" style="flex:0 0 auto;padding:6px 10px;font-size:12px;background:#2d4a2d;border:1px solid #56d364">+ Tiết kiệm quota (tất cả)</button>
-        </div>
-      </div>
-      <button id="sendBtn">Gửi</button>
-      <button class="secondary" id="copyReplyBtn">Copy reply</button>
-      <button class="secondary" id="copyFullBtn">Copy toàn bộ</button>
-      <button class="secondary" id="saveBtn">Lưu cấu hình</button>
-    </section>
-    </div>
-
-    <div id="terminal-tab" class="tab-content">
-      <section class="cards">
-        <div class="card"><div class="k">Commands</div><div class="v" id="cmdCount">0</div></div>
-        <div class="card"><div class="k">Success</div><div class="v" id="cmdSuccess" style="color:var(--green)">0</div></div>
-        <div class="card"><div class="k">Failed</div><div class="v" id="cmdFailed" style="color:var(--red)">0</div></div>
-        <div class="card"><div class="k">Last exit</div><div class="v" id="cmdExit">-</div></div>
-      </section>
-
-      <label>Thư mục làm việc (cwd)</label>
-      <input id="termCwd" class="terminal-cmd" placeholder="Tự động lấy từ Thư mục thao tác" />
-
-      <label>Command</label>
-      <textarea id="termCmd" class="terminal-cmd" placeholder="Nhập lệnh CMD/Terminal... (Ctrl+Enter để chạy)" style="min-height:80px"></textarea>
-
-      <div style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap">
-        <button id="runCmdBtn" style="background:var(--green);color:#071024">▶ Run</button>
-        <button class="secondary" id="copyCmdBtn">Copy command</button>
-        <button class="secondary" id="copyOutputBtn">Copy output</button>
-        <button class="secondary" id="clearOutputBtn">Clear output</button>
-        <button class="secondary" id="pasteReplyBtn">Dán reply Claude</button>
+      <label>Thư mục thao tác</label>
+      <div class="row">
+        <input id="cwd" placeholder="Ví dụ F:\1_A_Disk_D\Tool\sanbox\release\V-0">
+        <button class="secondary" id="pickFolder">CHỌN THƯ MỤC</button>
       </div>
 
-      <label>Output</label>
-      <div id="termOutput" class="terminal-output">
-        <div class="info">Sẵn sàng chạy lệnh. Nhập command ở trên và bấm Run hoặc Ctrl+Enter.</div>
+      <label>Lệnh CMD</label>
+      <textarea id="cmd">dir</textarea>
+
+      <div class="row">
+        <button id="runCmd">CHẠY CMD</button>
+        <button class="secondary" id="copyCmd">COPY LỆNH</button>
+        <button class="secondary" id="copyOut">COPY OUTPUT</button>
+        <button class="danger" id="clearOut">XÓA OUTPUT</button>
       </div>
+
+      <div class="status" id="cmdStatus"></div>
+      <label>Output CMD</label>
+      <pre id="cmdOut">Chưa chạy lệnh.</pre>
     </div>
-  </main>
+
+    <div class="box">
+      <div class="bigTitle" style="color:#7aa2ff">CHAT CLAUDE NHẸ</div>
+
+      <label>Base URL</label>
+      <input id="baseUrl" value="https://unlimited.aiprimetech.io">
+
+      <label>Token</label>
+      <input id="token" type="password" placeholder="Dán token">
+
+      <label>Model</label>
+      <select id="model">
+        <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001</option>
+        <option value="claude-3-7-sonnet-20250219">claude-3-7-sonnet-20250219</option>
+        <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
+      </select>
+
+      <label>Prompt</label>
+      <textarea id="prompt">ping</textarea>
+
+      <div class="row">
+        <button id="sendChat">GỬI CLAUDE</button>
+        <button class="secondary" id="copyReply">COPY REPLY</button>
+        <button class="secondary" id="copyAll">COPY TOÀN BỘ</button>
+      </div>
+
+      <div class="tokens">
+        <div>Input: <b id="inTok">0</b></div>
+        <div>Output: <b id="outTok">0</b></div>
+      </div>
+
+      <div class="status" id="chatStatus"></div>
+      <label>Reply</label>
+      <pre id="reply">Chưa gửi.</pre>
+    </div>
+  </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-let reqCount = 0, totalIn = 0, totalOut = 0, lastReply = "";
-let history = [];
-let workspaceFiles = [];
+let lastCmdOut = "";
+let lastReply = "";
 
-function setStatus(text, cls=""){ $("status").className="status "+cls; $("status").textContent=text; }
-function esc(s){ return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m])); }
-function modelValue(){ return $("customModel").value.trim() || $("model").value; }
-
-function addBubble(type,text){
-  const div=document.createElement("div");
-  div.className="bubble "+type;
-  div.innerHTML=esc(text);
-  $("chat").appendChild(div);
-  $("chat").scrollTop=$("chat").scrollHeight;
+function saveLocal(){
+  localStorage.setItem("panel_cwd", $("cwd").value);
+  localStorage.setItem("panel_baseUrl", $("baseUrl").value);
+  localStorage.setItem("panel_model", $("model").value);
 }
-
-function updateUsage(usage, model){
-  reqCount += usage ? 1 : 0;
-  totalIn += Number(usage?.input_tokens || 0);
-  totalOut += Number(usage?.output_tokens || 0);
-  $("reqCount").textContent=reqCount;
-  $("inTok").textContent=totalIn.toLocaleString();
-  $("outTok").textContent=totalOut.toLocaleString();
-  $("lastModel").textContent=model || "-";
+function loadLocal(){
+  $("cwd").value = localStorage.getItem("panel_cwd") || "";
+  $("baseUrl").value = localStorage.getItem("panel_baseUrl") || $("baseUrl").value;
+  $("model").value = localStorage.getItem("panel_model") || $("model").value;
 }
-
-function selectedFiles(){
-  return Array.from(document.querySelectorAll(".file input:checked")).map(x=>x.value);
-}
-
-function fullConversationText(){
-  return Array.from(document.querySelectorAll("#chat .bubble")).map(b=>{
-    let role="CLAUDE";
-    if(b.classList.contains("user")) role="USER";
-    if(b.classList.contains("error")) role="ERROR";
-    const text=(b.innerText||"").trim();
-    return text ? "### "+role+"\n"+text : "";
-  }).filter(Boolean).join("\n\n");
-}
-
-async function copyText(text, label){
-  await navigator.clipboard.writeText(text || "");
-  setStatus(label, "ok");
-}
-
-function saveConfig(){
-  localStorage.setItem("cp_baseUrl",$("baseUrl").value.trim());
-  localStorage.setItem("cp_model",$("model").value);
-  localStorage.setItem("cp_customModel",$("customModel").value.trim());
-  localStorage.setItem("cp_maxTokens",$("maxTokens").value);
-  localStorage.setItem("cp_workspacePath",$("workspacePath").value.trim());
-  localStorage.setItem("cp_workspaceMaxChars",$("workspaceMaxChars").value);
-  localStorage.setItem("cp_includeHistory",$("includeHistory").checked ? "1" : "0");
-  localStorage.setItem("cp_autoClearPrompt",$("autoClearPrompt").checked ? "1" : "0");
-  setStatus("Đã lưu cấu hình. Token không được lưu.", "ok");
-}
-
-function loadConfig(){
-  $("baseUrl").value=localStorage.getItem("cp_baseUrl") || $("baseUrl").value;
-  $("model").value=localStorage.getItem("cp_model") || $("model").value;
-  $("customModel").value=localStorage.getItem("cp_customModel") || "";
-  $("maxTokens").value=localStorage.getItem("cp_maxTokens") || $("maxTokens").value;
-  $("workspacePath").value=localStorage.getItem("cp_workspacePath") || "";
-  $("workspaceMaxChars").value=localStorage.getItem("cp_workspaceMaxChars") || $("workspaceMaxChars").value;
-  $("includeHistory").checked=localStorage.getItem("cp_includeHistory")==="1";
-  $("autoClearPrompt").checked=localStorage.getItem("cp_autoClearPrompt")!=="0";
-}
-
-async function api(path, payload){
-  const res=await fetch(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload||{})});
-  const data=await res.json();
-  if(!res.ok || !data.ok) throw new Error(data.error || "Request failed");
+async function post(url, body){
+  const r = await fetch(url, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(body||{})});
+  const data = await r.json();
+  if(!r.ok || data.ok === false) throw new Error(data.error || "Lỗi");
   return data;
 }
+function dangerous(cmd){
+  return /git\s+push|deploy|rm\s+-rf|del\s+\/s|format\s|type\s+\.env|cat\s+\.env/i.test(cmd);
+}
 
-async function pickFolder(){
-  setStatus("Đang mở hộp chọn thư mục...", "warn");
-  
-  // Add timeout to avoid hanging
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-  
+$("pickFolder").onclick = async () => {
+  $("cmdStatus").textContent = "Đang mở chọn thư mục...";
   try {
-    const res = await fetch("/api/workspace/pick", {
-      method: "POST",
-      headers: {"content-type": "application/json"},
-      body: JSON.stringify({}),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    const data = await res.json();
-    if(!res.ok || !data.ok) throw new Error(data.error || "Request failed");
-    
+    const data = await post("/api/pick-folder", {});
     if(data.folder){
-      $("workspacePath").value=data.folder;
-      setStatus("Đã chọn thư mục.", "ok");
-      await loadFiles();
+      $("cwd").value = data.folder;
+      saveLocal();
+      $("cmdStatus").textContent = "Đã chọn: " + data.folder;
     } else {
-      setStatus("Chưa chọn thư mục.", "warn");
+      $("cmdStatus").textContent = "Không chọn thư mục.";
     }
-  } catch(err) {
-    clearTimeout(timeoutId);
-    // Fallback: prompt user to paste folder path manually
-    const manualPath = prompt("Không mở được hộp chọn thư mục.\nVui lòng dán đường dẫn folder vào đây:", $("workspacePath").value.trim());
-    if(manualPath && manualPath.trim()){
-      $("workspacePath").value = manualPath.trim();
-      setStatus("Đã nhận đường dẫn thủ công.", "ok");
-      await loadFiles();
-    } else {
-      setStatus("Chưa chọn thư mục.", "warn");
-    }
+  } catch(e) {
+    $("cmdStatus").textContent = "Lỗi chọn thư mục: " + e.message;
   }
-}
-
-async function loadFiles(){
-  const folder=$("workspacePath").value.trim();
-  if(!folder) return setStatus("Chưa có đường dẫn folder.", "warn");
-  setStatus("Đang load danh sách file...", "warn");
-  const data=await api("/api/workspace/list",{path:folder});
-  workspaceFiles=data.files || [];
-  renderFiles();
-  setStatus("Đã load "+workspaceFiles.length+" file nhẹ. Tick file nào muốn gửi.", "ok");
-}
-
-function renderFiles(){
-  const box=$("filesBox");
-  if(!workspaceFiles.length){
-    box.innerHTML='<div class="mini">Không có file phù hợp hoặc chưa load.</div>';
-    return;
-  }
-  box.innerHTML=workspaceFiles.map(f=>`
-    <label class="file">
-      <input type="checkbox" value="${esc(f.rel)}">
-      <span>${esc(f.rel)} <span class="mini">(${f.size} bytes)</span></span>
-    </label>
-  `).join("");
-}
-
-async function sendPrompt(promptOverride){
-  const promptBox=$("prompt");
-  const prompt=(promptOverride || promptBox.value).trim();
-  const token=$("token").value.trim();
-
-  if(!token) return setStatus("Thiếu token.", "warn");
-  if(!prompt) return setStatus("Thiếu prompt.", "warn");
-
-  if(!promptOverride && $("autoClearPrompt").checked){
-    promptBox.value="";
-    promptBox.focus();
-  }
-
-  addBubble("user",prompt);
-  setStatus("Đang gửi...", "warn");
-
-  try{
-    const payload={
-      baseUrl:$("baseUrl").value.trim(),
-      token,
-      model:modelValue(),
-      prompt,
-      maxTokens:Number($("maxTokens").value || 800),
-      includeHistory:$("includeHistory").checked,
-      history:$("includeHistory").checked ? history : [],
-      workspace:{
-        include:$("includeWorkspace").checked,
-        path:$("workspacePath").value.trim(),
-        files:selectedFiles(),
-        maxChars:Number($("workspaceMaxChars").value || 30000)
-      }
-    };
-
-    const data=await api("/api/chat",payload);
-    lastReply=data.reply || "";
-    addBubble("assistant",lastReply || "[Không có text trả về]");
-    updateUsage(data.usage,data.model);
-
-    history.push({role:"user",content:prompt});
-    history.push({role:"assistant",content:lastReply});
-    history=history.slice(-40);
-
-    setStatus(`OK | input ${data.usage?.input_tokens||0} | output ${data.usage?.output_tokens||0} | history ${$("includeHistory").checked ? "ON" : "OFF"} | files ${payload.workspace.include ? payload.workspace.files.length : 0}`, "ok");
-
-    if($("autoCopyFull").checked){
-      await copyText(fullConversationText(),"Đã auto copy toàn bộ.");
-    }
-  }catch(err){
-    addBubble("error",err.message || String(err));
-    setStatus("Lỗi: "+(err.message || String(err)), "");
-  }
-}
-
-$("sendBtn").onclick=()=>sendPrompt();
-$("pingBtn").onclick=()=>sendPrompt("ping");
-$("copyReplyBtn").onclick=()=>copyText(lastReply,"Đã copy reply.");
-$("copyFullBtn").onclick=()=>copyText(fullConversationText(),"Đã copy toàn bộ USER + CLAUDE.");
-$("saveBtn").onclick=saveConfig;
-$("pickFolderBtn").onclick=pickFolder;
-$("loadFilesBtn").onclick=loadFiles;
-$("selectNoneBtn").onclick=()=>document.querySelectorAll(".file input").forEach(x=>x.checked=false);
-
-$("clearBtn").onclick=()=>{
-  $("chat").innerHTML="";
-  reqCount=0; totalIn=0; totalOut=0; lastReply=""; history=[];
-  $("reqCount").textContent="0"; $("inTok").textContent="0"; $("outTok").textContent="0"; $("lastModel").textContent="-";
-  addBubble("assistant","Đã xóa chat local và lịch sử gửi kèm.");
 };
 
-$("prompt").addEventListener("keydown",e=>{
-  if(e.ctrlKey && e.key==="Enter") sendPrompt();
-});
+$("runCmd").onclick = async () => {
+  const command = $("cmd").value.trim();
+  if(!command){ $("cmdStatus").textContent = "Chưa nhập lệnh."; return; }
+  if(dangerous(command) && !confirm("Lệnh có vẻ nguy hiểm. Chạy tiếp không?")) return;
 
-const presets = {
-  "no-history": "\n\n[Chỉ thị: Không đọc lịch sử chat, chỉ tập trung vào yêu cầu hiện tại.]",
-  "no-files": "\n\n[Chỉ thị: Không đọc toàn bộ file trong repo, chỉ đọc file liên quan trực tiếp đến yêu cầu.]",
-  "suggest-files": "\n\n[Chỉ thị: Nếu có file nào nằm ngoài kế hoạch nhưng cần sửa, hãy gợi ý cho tôi trước khi thực hiện.]",
-  "save-quota": "\n\n[Chỉ thị tiết kiệm quota:\n- Không đọc lịch sử chat\n- Không đọc toàn bộ file trong repo, chỉ đọc file liên quan\n- Nếu có file ngoài kế hoạch cần sửa, gợi ý trước khi làm]"
+  saveLocal();
+  $("cmdStatus").textContent = "Đang chạy CMD...";
+  $("cmdOut").textContent = "Đang chạy...";
+  try {
+    const data = await post("/api/cmd", {cwd:$("cwd").value.trim(), command});
+    lastCmdOut =
+      "CWD: " + data.cwd + "\n" +
+      "COMMAND: " + data.command + "\n" +
+      "EXIT: " + data.exitCode + "\n\n" +
+      "STDOUT:\n" + (data.stdout || "") + "\n\n" +
+      "STDERR:\n" + (data.stderr || "");
+    $("cmdOut").textContent = lastCmdOut;
+    $("cmdStatus").textContent = data.ok ? "CMD chạy xong OK." : "CMD chạy xong nhưng có lỗi.";
+  } catch(e) {
+    lastCmdOut = "ERROR: " + e.message;
+    $("cmdOut").textContent = lastCmdOut;
+    $("cmdStatus").textContent = "Lỗi CMD.";
+  }
 };
 
-document.querySelectorAll(".preset-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const preset = presets[btn.dataset.preset];
-    if (preset) {
-      const promptBox = $("prompt");
-      promptBox.value = promptBox.value.trim() + preset;
-      promptBox.scrollTop = promptBox.scrollHeight;
-      promptBox.focus();
-    }
-  });
-});
+$("copyCmd").onclick = () => navigator.clipboard.writeText($("cmd").value);
+$("copyOut").onclick = () => navigator.clipboard.writeText(lastCmdOut || $("cmdOut").textContent);
+$("clearOut").onclick = () => { lastCmdOut=""; $("cmdOut").textContent="Đã xóa output."; };
 
-// Tab switching
-document.querySelectorAll(".tab").forEach(tab => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-    tab.classList.add("active");
-    $(tab.dataset.tab + "-tab").classList.add("active");
-  });
-});
+$("sendChat").onclick = async () => {
+  const prompt = $("prompt").value.trim();
+  if(!prompt){ $("chatStatus").textContent = "Chưa nhập prompt."; return; }
 
-// Terminal functionality
-let termStats = { count: 0, success: 0, failed: 0, lastExit: "-" };
-
-const DANGEROUS_PATTERNS = [
-  /git\s+push/i,
-  /deploy/i,
-  /rm\s+-rf/i,
-  /del\s+\/s/i,
-  /format/i,
-  /type\s+\.env/i,
-  /cat\s+\.env/i
-];
-
-function isDangerousCommand(cmd) {
-  return DANGEROUS_PATTERNS.some(pattern => pattern.test(cmd));
-}
-
-function updateTermStats() {
-  $("cmdCount").textContent = termStats.count;
-  $("cmdSuccess").textContent = termStats.success;
-  $("cmdFailed").textContent = termStats.failed;
-  $("cmdExit").textContent = termStats.lastExit;
-}
-
-function appendOutput(text, type = "stdout") {
-  const output = $("termOutput");
-  const div = document.createElement("div");
-  div.className = type;
-  div.textContent = text;
-  output.appendChild(div);
-  output.scrollTop = output.scrollHeight;
-}
-
-async function runTerminalCommand() {
-  const cmd = $("termCmd").value.trim();
-  const cwd = $("termCwd").value.trim() || $("workspacePath").value.trim();
-
-  if (!cmd) {
-    appendOutput("Lỗi: Thiếu command", "stderr");
-    return;
-  }
-
-  if (!cwd) {
-    appendOutput("Lỗi: Thiếu thư mục làm việc. Vui lòng chọn thư mục hoặc nhập cwd.", "stderr");
-    return;
-  }
-
-  // Safety check
-  if (isDangerousCommand(cmd)) {
-    const confirmed = confirm(
-      "⚠️ CẢNH BÁO: Command này có thể nguy hiểm!\n\n" +
-      "Command: " + cmd + "\n\n" +
-      "Bạn có chắc chắn muốn chạy không?"
-    );
-    if (!confirmed) {
-      appendOutput("Đã hủy command: " + cmd, "info");
-      return;
-    }
-  }
-
-  appendOutput("$ " + cmd, "info");
-  setStatus("Đang chạy command...", "warn");
+  $("prompt").value = "";
+  $("chatStatus").textContent = "Đang gửi Claude...";
+  $("reply").textContent = "Đang chờ...";
+  saveLocal();
 
   try {
-    const data = await api("/api/terminal/run", { command: cmd, cwd: cwd });
-    
-    if (data.stdout) appendOutput(data.stdout, "stdout");
-    if (data.stderr) appendOutput(data.stderr, "stderr");
-    
-    termStats.count++;
-    if (data.ok) {
-      termStats.success++;
-      termStats.lastExit = "0";
-      setStatus("Command chạy thành công", "ok");
-    } else {
-      termStats.failed++;
-      termStats.lastExit = data.exitCode || "?";
-      setStatus("Command thất bại với exit code: " + termStats.lastExit, "");
-    }
-    
-    updateTermStats();
-  } catch (err) {
-    appendOutput("Lỗi: " + (err.message || String(err)), "stderr");
-    termStats.count++;
-    termStats.failed++;
-    termStats.lastExit = "err";
-    updateTermStats();
-    setStatus("Lỗi khi chạy command: " + (err.message || String(err)), "");
-  }
-}
-
-$("runCmdBtn").onclick = runTerminalCommand;
-
-$("copyCmdBtn").onclick = () => {
-  const cmd = $("termCmd").value;
-  copyText(cmd, "Đã copy command");
-};
-
-$("copyOutputBtn").onclick = () => {
-  const output = $("termOutput").innerText;
-  copyText(output, "Đã copy output");
-};
-
-$("clearOutputBtn").onclick = () => {
-  $("termOutput").innerHTML = '<div class="info">Đã xóa output.</div>';
-};
-
-$("pasteReplyBtn").onclick = () => {
-  if (lastReply) {
-    $("termCmd").value = lastReply;
-    setStatus("Đã dán reply Claude vào command", "ok");
-  } else {
-    setStatus("Chưa có reply nào để dán", "warn");
+    const data = await post("/api/chat", {
+      baseUrl:$("baseUrl").value.trim(),
+      token:$("token").value.trim(),
+      model:$("model").value,
+      maxTokens:800,
+      prompt
+    });
+    lastReply = data.reply || "";
+    $("reply").textContent = lastReply;
+    $("inTok").textContent = data.usage?.input_tokens || 0;
+    $("outTok").textContent = data.usage?.output_tokens || 0;
+    $("chatStatus").textContent = "Claude trả lời xong.";
+  } catch(e) {
+    lastReply = "ERROR: " + e.message;
+    $("reply").textContent = lastReply;
+    $("chatStatus").textContent = "Lỗi Claude.";
   }
 };
 
-$("termCmd").addEventListener("keydown", e => {
-  if (e.ctrlKey && e.key === "Enter") {
-    e.preventDefault();
-    runTerminalCommand();
-  }
-});
+$("copyReply").onclick = () => navigator.clipboard.writeText(lastReply || $("reply").textContent);
+$("copyAll").onclick = () => {
+  const text =
+    "### CMD OUTPUT\n" + $("cmdOut").textContent + "\n\n" +
+    "### CLAUDE REPLY\n" + $("reply").textContent;
+  navigator.clipboard.writeText(text);
+};
 
-// Auto-sync cwd from workspacePath
-$("workspacePath").addEventListener("change", () => {
-  const wsPath = $("workspacePath").value.trim();
-  if (wsPath && !$("termCwd").value.trim()) {
-    $("termCwd").value = wsPath;
-  }
-});
-
-loadConfig();
+loadLocal();
 </script>
 </body>
 </html>
