@@ -1,16 +1,16 @@
 {
-  "name": "claude-code-agent",
-  "version": "1.0.0",
-  "description": "Lightweight desktop code-agent with Claude proxy integration",
+  "name": "local-cmd-agent",
+  "version": "1.0.1",
+  "description": "Local Electron CMD agent with workspace browser and file preview",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder"
+    "start": "npm run electron:dev"
   },
-  "keywords": ["electron", "claude", "code-agent"],
+  "keywords": ["electron", "local", "cmd", "agent"],
   "author": "",
   "license": "MIT",
   "devDependencies": {

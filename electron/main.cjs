@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -17,7 +17,6 @@ function createWindow() {
     }
   });
 
-  // Load Vite dev server in development or dist/index.html in production
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     mainWindow.webContents.openDevTools();
@@ -40,101 +39,84 @@ app.on('activate', () => {
   }
 });
 
-// IPC: Select workspace folder
-ipcMain.handle('select-workspace', async () => {
+ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory']
   });
-  
   if (result.canceled) {
     return null;
   }
-  
   return result.filePaths[0];
 });
 
-// IPC: Get default workspace (user's home directory)
-ipcMain.handle('get-default-workspace', () => {
-  return app.getPath('home');
-});
+const IGNORED_ENTRIES = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.vite', '.cache']);
 
-// IPC: List workspace files
-ipcMain.handle('list-workspace-files', async (event, workspacePath) => {
+ipcMain.handle('list-files', async (event, workspacePath) => {
   try {
     if (!workspacePath || !fs.existsSync(workspacePath)) {
       return { error: 'Workspace path does not exist' };
     }
 
     const files = [];
+
     const readDir = (dir, prefix = '') => {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
-      
       for (const entry of entries) {
-        // Skip node_modules and .git
-        if (entry.name === 'node_modules' || entry.name === '.git') {
+        if (IGNORED_ENTRIES.has(entry.name)) {
           continue;
         }
 
-        const fullPath = path.join(dir, entry.name);
         const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+        const fullPath = path.join(dir, entry.name);
 
         if (entry.isDirectory()) {
-          files.push({
-            name: entry.name,
-            path: relativePath,
-            type: 'directory'
-          });
-          // Limit depth to avoid too many files
-          if (relativePath.split('/').length < 3) {
-            readDir(fullPath, relativePath);
-          }
+          files.push({ name: entry.name, path: relativePath, type: 'directory' });
+          readDir(fullPath, relativePath);
         } else if (entry.isFile()) {
           const stats = fs.statSync(fullPath);
-          files.push({
-            name: entry.name,
-            path: relativePath,
-            type: 'file',
-            size: stats.size
-          });
+          files.push({ name: entry.name, path: relativePath, type: 'file', size: stats.size });
         }
       }
     };
 
     readDir(workspacePath);
-    return { files };
+    return { ok: true, files };
   } catch (error) {
     return { error: error.message };
   }
 });
 
-// IPC: Read workspace file
-ipcMain.handle('read-workspace-file', async (event, filePath) => {
+ipcMain.handle('read-file', async (event, { folder, rel }) => {
   try {
-    if (!fs.existsSync(filePath)) {
+    if (!folder || !rel) {
+      return { error: 'Invalid file request' };
+    }
+
+    const normalizedFolder = path.normalize(folder);
+    const requestedPath = path.normalize(path.join(normalizedFolder, rel));
+
+    if (!requestedPath.startsWith(normalizedFolder)) {
+      return { error: 'Invalid file path' };
+    }
+
+    if (!fs.existsSync(requestedPath) || !fs.statSync(requestedPath).isFile()) {
       return { error: 'File does not exist' };
     }
 
-    const content = fs.readFileSync(filePath, 'utf-8');
-    return { content };
+    const stats = fs.statSync(requestedPath);
+    if (stats.size > 500 * 1024) {
+      return { error: 'File too large to preview (>500KB)' };
+    }
+
+    const content = fs.readFileSync(requestedPath, 'utf-8');
+    return { ok: true, content };
   } catch (error) {
     return { error: error.message };
   }
 });
 
-// IPC: Open folder in explorer
-ipcMain.handle('open-folder-in-explorer', async (event, folderPath) => {
+ipcMain.handle('run-cmd', async (event, { cwd, command }) => {
   try {
-    shell.openPath(folderPath);
-    return { success: true };
-  } catch (error) {
-    return { error: error.message };
-  }
-});
-
-// IPC: Run raw CMD command
-ipcMain.handle('run-raw-cmd', async (event, { cwd, command }) => {
-  try {
-    // Kill existing process if any
     if (currentProcess) {
       currentProcess.kill();
       currentProcess = null;
@@ -150,75 +132,57 @@ ipcMain.handle('run-raw-cmd', async (event, { cwd, command }) => {
       let stdout = '';
       let stderr = '';
 
-      // Stream output to renderer
       cmdProcess.stdout.on('data', (data) => {
         const text = data.toString();
         stdout += text;
-        mainWindow.webContents.send('command-output', { type: 'stdout', data: text });
+        if (mainWindow) {
+          mainWindow.webContents.send('command-output', { type: 'stdout', data: text });
+        }
       });
 
       cmdProcess.stderr.on('data', (data) => {
         const text = data.toString();
         stderr += text;
-        mainWindow.webContents.send('command-output', { type: 'stderr', data: text });
+        if (mainWindow) {
+          mainWindow.webContents.send('command-output', { type: 'stderr', data: text });
+        }
       });
 
-      // Timeout after 60 seconds
       const timeout = setTimeout(() => {
         if (currentProcess) {
           currentProcess.kill();
-          mainWindow.webContents.send('command-output', { 
-            type: 'stderr', 
-            data: '\n[TIMEOUT: Command killed after 60 seconds]' 
-          });
+          currentProcess = null;
+          if (mainWindow) {
+            mainWindow.webContents.send('command-output', {
+              type: 'stderr',
+              data: '\n[TIMEOUT: Command killed after 60 seconds]'
+            });
+          }
         }
       }, 60000);
 
       cmdProcess.on('close', (code) => {
         clearTimeout(timeout);
         currentProcess = null;
-        resolve({
-          stdout,
-          stderr,
-          exitCode: code
-        });
+        resolve({ ok: true, cwd: cwd || process.cwd(), command, stdout, stderr, exitCode: code });
       });
 
       cmdProcess.on('error', (error) => {
         clearTimeout(timeout);
         currentProcess = null;
-        resolve({
-          stdout,
-          stderr: stderr + '\n' + error.message,
-          exitCode: -1
-        });
+        resolve({ ok: false, cwd: cwd || process.cwd(), command, stdout, stderr: stderr + '\n' + error.message, exitCode: -1 });
       });
     });
   } catch (error) {
-    return {
-      stdout: '',
-      stderr: error.message,
-      exitCode: -1
-    };
+    return { ok: false, cwd: cwd || process.cwd(), command, stdout: '', stderr: error.message, exitCode: -1 };
   }
 });
 
-// IPC: Stop current command
-ipcMain.handle('stop-command', async () => {
+ipcMain.handle('stop-cmd', async () => {
   if (currentProcess) {
     currentProcess.kill();
     currentProcess = null;
     return { success: true };
   }
   return { success: false, message: 'No running command' };
-});
-
-// IPC: Open browser
-ipcMain.handle('open-browser', async (event, url) => {
-  try {
-    await shell.openExternal(url);
-    return { success: true };
-  } catch (error) {
-    return { error: error.message };
-  }
 });
