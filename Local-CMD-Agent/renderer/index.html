@@ -83,7 +83,7 @@
     .status { color: #7ee787; font-size: 13px; margin-top: 10px; min-height: 18px; }
     .warn { color: #ffd166; }
     .bad { color: #ff7b72; }
-    .preview, .aiReply {
+    .preview {
       background: #111;
       border: 1px solid #3b3b42;
       border-radius: 8px;
@@ -92,9 +92,8 @@
       overflow: auto;
       font-family: Consolas, monospace;
       font-size: 13px;
+      max-height: 220px;
     }
-    .preview { max-height: 220px; }
-    .aiReply { min-height: 180px; max-height: 260px; }
     .hint { color: #a9a9b3; font-size: 13px; line-height: 1.45; }
     .tokenBox {
       display: grid;
@@ -109,6 +108,14 @@
       color: #cbd5e1;
     }
     .tokenBox b { color: #5eead4; }
+    .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+    .chip { border: 1px solid #3b3b42; background: #171a24; color: #d9e2ff; border-radius: 999px; padding: 8px 12px; cursor: pointer; font-size: 13px; }
+    .chip.active, .chip:hover { background: #23568f; border-color: #4a7acc; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 20; }
+    .modal { width: min(460px, calc(100% - 32px)); background: #151820; border: 1px solid #3b3b42; border-radius: 16px; padding: 20px; box-shadow: 0 0 0 1px rgba(255,255,255,0.04); }
+    .modal p { margin: 0 0 18px; color: #d9e2ff; line-height: 1.5; }
+    .modal-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .modal button { min-width: 120px; }
     .divider { border-top: 1px solid #3b3b42; margin: 14px 0; }
   </style>
 </head>
@@ -127,11 +134,15 @@
         <label>COMMAND / PROMPT</label>
         <textarea id="cmdInput" class="cmdArea" placeholder="Nhập câu lệnh hoặc yêu cầu AI ở đây. Ví dụ: dir, node -v, kiểm tra file README.md">dir</textarea>
 
-        <label class="check"><input id="autoClearCmd" type="checkbox" checked> Tự xóa input sau khi RUN CMD</label>
+        <div class="chip-row" id="modelChips"></div>
+
+        <label class="check"><input id="autoClearCmd" type="checkbox" checked> Tự xóa input sau khi RUN CMD / ASK CLAUDE / SEND OUTPUT</label>
 
         <div class="row">
           <button id="runCmd" class="big">▶ RUN CMD</button>
           <button id="askClaude" class="big green">💬 ASK CLAUDE</button>
+          <button id="claudeToCmd" class="big green">CLAUDE → CMD</button>
+          <button id="sendOutput" class="big green">SEND OUTPUT → CLAUDE</button>
           <button id="stopCmd" class="gray big">■ STOP</button>
           <button id="copyOutput" class="gray big">📋 COPY OUTPUT</button>
           <button id="clearOutput" class="red big">🧹 CLEAR</button>
@@ -150,7 +161,7 @@
       <div class="divider"></div>
 
       <h2>AI CONFIG</h2>
-      <div class="hint">ASK CLAUDE chỉ chạy khi bật AI và nhấn nút. Token không lưu.</div>
+      <div class="hint">ASK CLAUDE / CLAUDE → CMD / SEND OUTPUT chỉ chạy khi bật AI và nhấn nút.</div>
       <label class="check"><input id="enableAi" type="checkbox"> Bật AI calls</label>
 
       <label>Base URL</label>
@@ -185,15 +196,18 @@
         <div>Total: <b id="totalTok">0</b></div>
       </div>
 
-      <div class="row">
-        <button id="copyAiReply" class="gray">COPY REPLY</button>
-        <button id="clearAi" class="red">CLEAR REPLY</button>
-      </div>
-
       <div id="aiStatus" class="status">AI tắt.</div>
-      <label>AI Reply</label>
-      <pre id="aiReply" class="aiReply">Chưa có phản hồi AI.</pre>
     </aside>
+  </div>
+
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal">
+      <p id="confirmMessage">Nội dung này giống câu hỏi, không giống lệnh CMD. Bạn muốn hỏi Claude hay vẫn chạy CMD?</p>
+      <div class="modal-buttons">
+        <button id="modalPrimary" class="green">ASK CLAUDE</button>
+        <button id="modalSecondary" class="gray">RUN ANYWAY</button>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -203,7 +217,6 @@ let currentFolder = "";
 let lastOutput = "";
 let selectedFileName = "";
 let selectedFileText = "";
-let lastAiReply = "";
 let reqCount = 0;
 let totalInput = 0;
 let totalOutput = 0;
@@ -355,6 +368,87 @@ window.cmdTool.onCmdOutput(data => {
   appendOutput(data.text || "");
 });
 
+function updateOutput(text) {
+  lastOutput = text;
+  $("output").textContent = lastOutput;
+  $("output").scrollTop = $("output").scrollHeight;
+}
+
+function buildClaudePromptForOutput(outputText, requestText) {
+  let prompt = "Hãy phân tích đầu ra CMD dưới đây và đề xuất bước tiếp theo.\n";
+  prompt += "OUTPUT CMD:\n" + outputText + "\n\n";
+  if (requestText) {
+    prompt += "YÊU CẦU BỔ SUNG:\n" + requestText + "\n\n";
+  }
+  prompt += "Chỉ trả lời kế tiếp bằng văn bản. Không chạy lệnh tự động.";
+  return prompt;
+}
+
+function showConfirm(message, primaryText, secondaryText, primaryHandler, secondaryHandler) {
+  const modal = $("confirmModal");
+  $("confirmMessage").textContent = message;
+  $("modalPrimary").textContent = primaryText;
+  $("modalSecondary").textContent = secondaryText;
+
+  const primaryClick = () => {
+    hideConfirm();
+    primaryHandler();
+  };
+
+  const secondaryClick = () => {
+    hideConfirm();
+    secondaryHandler();
+  };
+
+  $("modalPrimary").onclick = primaryClick;
+  $("modalSecondary").onclick = secondaryClick;
+  modal.style.display = "flex";
+}
+
+function hideConfirm() {
+  const modal = $("confirmModal");
+  modal.style.display = "none";
+  $("modalPrimary").onclick = null;
+  $("modalSecondary").onclick = null;
+}
+
+function isNaturalLanguageInput(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (/\b(xin chào|chào|kiểm tra|phiên bản|giúp|hỏi|làm ơn|gợi ý|phân tích|lỗi|tìm|cài đặt|mở|xem|cách|hướng dẫn|lặp lại|xử lý)\b/i.test(trimmed) && !/\b(cd|dir|git|npm|node|python|echo|type|copy|move|mkdir|rmdir|del|start|run|tasklist|ipconfig|where|set|chcp|npm|yarn|vendor|composer)\b/i.test(trimmed)) {
+    return true;
+  }
+  if (!/[^A-Za-z0-9_\-\.\\\/:;"'&|()<>,*%$@!\s]/.test(trimmed)) {
+    return false;
+  }
+  return true;
+}
+
+function selectModelChip(value) {
+  $("modelSelect").value = value;
+  document.querySelectorAll(".chip").forEach(x => x.classList.toggle("active", x.dataset.model === value));
+}
+
+function createModelChips() {
+  const chips = [
+    { label: "Haiku 4.5", value: "claude-haiku-4-5-20251001" },
+    { label: "Sonnet 3.7", value: "claude-3-7-sonnet-20250219" },
+    { label: "Sonnet 3.5", value: "claude-3-5-sonnet-20241022" }
+  ];
+  const container = $("modelChips");
+  container.innerHTML = "";
+  for (const item of chips) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip";
+    button.dataset.model = item.value;
+    button.textContent = item.label;
+    button.onclick = () => selectModelChip(item.value);
+    container.appendChild(button);
+  }
+  selectModelChip($("modelSelect").value);
+}
+
 $("loadModels").onclick = async () => {
   if (!$("enableAi").checked) {
     setAiStatus("AI đang tắt. Tick 'Bật AI calls' trước.", "warn");
@@ -389,70 +483,178 @@ $("loadModels").onclick = async () => {
     }
 
     const preferred = "claude-haiku-4-5-20251001";
-    if (data.models.includes(preferred)) $("modelSelect").value = preferred;
-
+    if (data.models.includes(preferred) && data.models.includes(preferred)) $("modelSelect").value = preferred;
+    createModelChips();
     setAiStatus("Đã load " + data.models.length + " models.", "");
   } catch (e) {
     setAiStatus("Lỗi load models: " + e.message, "bad");
   }
 };
 
-$("askClaude").onclick = async () => {
+async function runCmdWithText(command) {
+  if (dangerous(command) && !confirm("Lệnh có vẻ nguy hiểm. Chạy tiếp không?")) return;
+
+  lastOutput = "";
+  updateOutput("Running...\n");
+  setStatus("Đang chạy CMD...");
+
+  const result = await window.cmdTool.runCmd({
+    cwd: currentFolder,
+    command
+  });
+
+  updateOutput(
+    "CWD: " + result.cwd + "\n" +
+    "COMMAND: " + result.command + "\n" +
+    "EXIT: " + result.exitCode + "\n\n" +
+    "STDOUT:\n" + (result.stdout || "") + "\n\n" +
+    "STDERR:\n" + (result.stderr || "")
+  );
+  setStatus(result.ok ? "CMD chạy xong OK." : "CMD chạy xong, có lỗi.", result.ok ? "" : "bad");
+}
+
+$("runCmd").onclick = () => {
+  const command = $("cmdInput").value.trim();
+  if (!command) {
+    setStatus("Chưa nhập lệnh.", "warn");
+    return;
+  }
+
+  const proceed = async () => {
+    await runCmdWithText(command);
+    if ($("autoClearCmd").checked) {
+      $("cmdInput").value = "";
+    }
+  };
+
+  if (isNaturalLanguageInput(command)) {
+    showConfirm(
+      "Nội dung này giống câu hỏi, không giống lệnh CMD. Bạn muốn hỏi Claude hay vẫn chạy CMD?",
+      "ASK CLAUDE",
+      "RUN ANYWAY",
+      () => $("askClaude").click(),
+      proceed
+    );
+    return;
+  }
+
+  proceed();
+};
+
+async function performAiCall(payload, outputHeader, clearInputAfter = false) {
   if (!$("enableAi").checked) {
     setAiStatus("AI đang tắt. Tick 'Bật AI calls' trước.", "warn");
-    return;
+    return null;
   }
 
   const token = $("aiToken").value.trim();
-  const prompt = $("cmdInput").value.trim();
-
   if (!token) {
     setAiStatus("Thiếu token.", "warn");
-    return;
-  }
-
-  if (!prompt) {
-    setAiStatus("Thiếu input cho AI.", "warn");
-    return;
+    return null;
   }
 
   setAiStatus("Đang gửi AI...", "warn");
-  $("aiReply").textContent = "Đang chờ...";
+  updateOutput(outputHeader + "\n\nĐang chờ...\n");
 
   try {
-    const data = await window.cmdTool.aiChat({
-      baseUrl: $("baseUrl").value.trim(),
-      token,
-      model: effectiveModel(),
-      maxTokens: Number($("maxTokens").value || 800),
-      prompt,
-      includeSelectedFile: $("includeSelectedFile").checked,
-      selectedFileName,
-      selectedFileText
-    });
-
-    lastAiReply = data.reply || "";
-    $("aiReply").textContent = lastAiReply || "[Không có text]";
+    const data = await window.cmdTool.aiChat(payload);
+    const reply = data.reply || "[Không có text]";
+    updateOutput(outputHeader + "\n\n" + reply);
     updateTokenBox(data.usage || {});
-
     setAiStatus("AI xong. Model: " + (data.model || effectiveModel()), "");
+    if (clearInputAfter) {
+      $("cmdInput").value = "";
+    }
+    return reply;
   } catch (e) {
-    lastAiReply = "ERROR: " + e.message;
-    $("aiReply").textContent = lastAiReply;
+    const errorText = "ERROR: " + e.message;
+    updateOutput(outputHeader + "\n\n" + errorText);
     setAiStatus("Lỗi AI: " + e.message, "bad");
+    return null;
+  }
+}
+
+$("askClaude").onclick = async () => {
+  const prompt = $("cmdInput").value.trim();
+  if (!prompt) {
+    setStatus("Chưa nhập yêu cầu AI.", "warn");
+    return;
+  }
+
+  await performAiCall({
+    baseUrl: $("baseUrl").value.trim(),
+    token: $("aiToken").value.trim(),
+    model: effectiveModel(),
+    maxTokens: Number($("maxTokens").value || 800),
+    prompt,
+    includeSelectedFile: $("includeSelectedFile").checked,
+    selectedFileName,
+    selectedFileText
+  }, "=== CLAUDE REPLY ===", $("autoClearCmd").checked);
+};
+
+$("claudeToCmd").onclick = async () => {
+  const prompt = $("cmdInput").value.trim();
+  if (!prompt) {
+    setStatus("Chưa nhập yêu cầu AI.", "warn");
+    return;
+  }
+
+  const reply = await performAiCall({
+    baseUrl: $("baseUrl").value.trim(),
+    token: $("aiToken").value.trim(),
+    model: effectiveModel(),
+    maxTokens: Number($("maxTokens").value || 800),
+    prompt,
+    includeSelectedFile: $("includeSelectedFile").checked,
+    selectedFileName,
+    selectedFileText,
+    systemInstruction: "Bạn là Windows CMD assistant. Hãy trả về CHỈ MỘT lệnh CMD phù hợp để thực hiện yêu cầu. Không giải thích. Không dùng markdown. Không tự chạy lệnh."
+  }, "=== CLAUDE GENERATED CMD ===", false);
+
+  if (reply) {
+    $("cmdInput").value = reply.trim();
   }
 };
 
-$("copyAiReply").onclick = async () => {
-  await navigator.clipboard.writeText(lastAiReply || $("aiReply").textContent);
-  setAiStatus("Đã copy AI reply.");
+$("sendOutput").onclick = async () => {
+  const currentOutput = $("output").textContent.trim();
+  const extraPrompt = $("cmdInput").value.trim();
+
+  if (!currentOutput) {
+    setStatus("Không có output CMD để gửi Claude.", "warn");
+    return;
+  }
+
+  const prompt = buildClaudePromptForOutput(currentOutput, extraPrompt);
+  await performAiCall({
+    baseUrl: $("baseUrl").value.trim(),
+    token: $("aiToken").value.trim(),
+    model: effectiveModel(),
+    maxTokens: Number($("maxTokens").value || 800),
+    prompt,
+    includeSelectedFile: $("includeSelectedFile").checked,
+    selectedFileName,
+    selectedFileText
+  }, "=== CLAUDE ANALYSIS ===", $("autoClearCmd").checked);
 };
 
-$("clearAi").onclick = () => {
-  lastAiReply = "";
-  $("aiReply").textContent = "Đã xóa AI reply.";
-  setAiStatus("Đã xóa AI local reply.");
+$("copyOutput").onclick = async () => {
+  await navigator.clipboard.writeText(lastOutput || $("output").textContent);
+  setStatus("Đã copy output.");
 };
+
+$("clearOutput").onclick = () => {
+  lastOutput = "";
+  $("output").textContent = "Cleared.";
+  setStatus("Đã xóa output.");
+};
+
+$("cmdInput").addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "Enter") $("runCmd").click();
+});
+
+createModelChips();
 
 const savedFolder = localStorage.getItem("cmd_tool_folder");
 if (savedFolder) {

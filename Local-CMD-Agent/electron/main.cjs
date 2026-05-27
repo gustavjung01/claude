@@ -231,6 +231,13 @@ ipcMain.handle("ai-chat", async (_event, payload) => {
 
   const messages = [];
 
+  if (payload.systemInstruction) {
+    messages.push({
+      role: "system",
+      content: String(payload.systemInstruction).slice(0, 12000)
+    });
+  }
+
   if (payload.includeHistory && Array.isArray(payload.history)) {
     for (const h of payload.history.slice(-12)) {
       if (h && (h.role === "user" || h.role === "assistant") && String(h.content || "").trim()) {
