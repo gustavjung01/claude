@@ -5,6 +5,9 @@ const { spawn } = require("child_process");
 
 let win = null;
 let runningChild = null;
+let modelTerminal = null; // child process or pty
+let modelTerminalIsPty = false;
+let modelTerminalFallback = false;
 
 const IGNORE_DIRS = new Set([".git", "node_modules", "dist", "build", ".next", ".vite", ".cache", "coverage"]);
 const TEXT_EXT = new Set([".txt",".md",".json",".js",".jsx",".ts",".tsx",".css",".html",".mjs",".cjs",".py",".ps1",".cmd",".bat",".yml",".yaml"]);
@@ -277,6 +280,149 @@ ipcMain.handle("ai-chat", async (_event, payload) => {
     usage: data.usage || {},
     stop_reason: data.stop_reason
   };
+});
+
+ipcMain.handle("start-model-terminal", async (_event, payload) => {
+  const baseUrl = String(payload.baseUrl || "").trim();
+  const token = String(payload.token || "").trim();
+  const model = String(payload.model || "").trim();
+  const cwd = payload.cwd && typeof payload.cwd === 'string' && fs.existsSync(payload.cwd) ? payload.cwd : process.cwd();
+
+  // prevent storing token on disk; token only used in env for child
+  if (modelTerminal) return { ok: false, message: "Terminal already running." };
+
+  // try to use node-pty if available
+  let nodePty = null;
+  try {
+    nodePty = require('node-pty');
+  } catch (e) {
+    nodePty = null;
+  }
+
+  const env = Object.assign({}, process.env, {
+    ANTHROPIC_BASE_URL: baseUrl || process.env.ANTHROPIC_BASE_URL || "",
+    ANTHROPIC_AUTH_TOKEN: token || "",
+    ANTHROPIC_MODEL: model || process.env.ANTHROPIC_MODEL || "",
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    CLAUDE_CODE_ATTRIBUTION_HEADER: '0'
+  });
+
+  if (nodePty) {
+    try {
+      modelTerminal = nodePty.spawn('claude', ['--model', model], {
+        name: 'xterm-color',
+        cols: 120,
+        rows: 30,
+        cwd,
+        env
+      });
+
+      modelTerminalIsPty = true;
+      modelTerminalFallback = false;
+
+      modelTerminal.onData((d) => {
+        if (win) win.webContents.send('model-terminal-data', { text: d });
+      });
+
+      modelTerminal.onExit(() => {
+        if (win) win.webContents.send('model-terminal-data', { text: '\n[Model terminal exited]\n' });
+        modelTerminal = null;
+        modelTerminalIsPty = false;
+      });
+
+      return { ok: true, fallback: false };
+    } catch (e) {
+      // fallthrough to fallback
+      modelTerminal = null;
+      nodePty = null;
+    }
+  }
+
+  // Fallback: open external cmd window with env set and run claude CLI there
+  try {
+    // Assemble command to set env vars then run claude
+    const setCmdParts = [];
+    if (baseUrl) setCmdParts.push(`set "ANTHROPIC_BASE_URL=${baseUrl}"`);
+    if (token) setCmdParts.push(`set "ANTHROPIC_AUTH_TOKEN=${token}"`);
+    if (model) setCmdParts.push(`set "ANTHROPIC_MODEL=${model}"`);
+    setCmdParts.push('set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1');
+    setCmdParts.push('set CLAUDE_CODE_ATTRIBUTION_HEADER=0');
+    const runCmd = setCmdParts.join(' & ') + ` & claude --model ${model}`;
+
+    // Use start to create external window; do not attach pipes
+    modelTerminal = spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', runCmd], {
+      cwd,
+      detached: true,
+      windowsHide: false
+    });
+
+    modelTerminalFallback = true;
+    modelTerminalIsPty = false;
+
+    // Inform renderer that we used external fallback
+    if (win) win.webContents.send('model-terminal-fallback', { message: 'Embedded terminal unavailable, opened external CMD fallback.' });
+
+    return { ok: true, fallback: true, message: 'external' };
+  } catch (e) {
+    modelTerminal = null;
+    return { ok: false, message: String(e) };
+  }
+});
+
+ipcMain.handle('write-model-terminal', async (_event, text) => {
+  if (!modelTerminal) return { ok: false, message: 'No terminal' };
+  try {
+    if (modelTerminalIsPty && typeof modelTerminal.write === 'function') {
+      modelTerminal.write(text);
+    } else {
+      // Cannot write to external fallback
+      return { ok: false, message: 'External fallback: cannot write programmatically.' };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: String(e) };
+  }
+});
+
+ipcMain.handle('resize-model-terminal', async (_event, payload) => {
+  if (modelTerminalIsPty && modelTerminal && typeof modelTerminal.resize === 'function') {
+    try {
+      modelTerminal.resize(Number(payload.cols) || 80, Number(payload.rows) || 24);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: String(e) };
+    }
+  }
+  return { ok: false, message: 'No pty terminal' };
+});
+
+ipcMain.handle('stop-model-terminal', async () => {
+  if (!modelTerminal) return { ok: true, message: 'No terminal' };
+  try {
+    if (modelTerminalIsPty && typeof modelTerminal.kill === 'function') {
+      modelTerminal.kill();
+    } else if (modelTerminalFallback && modelTerminal && typeof modelTerminal.kill === 'function') {
+      try { modelTerminal.kill(); } catch (e) {}
+    }
+    modelTerminal = null;
+    modelTerminalIsPty = false;
+    modelTerminalFallback = false;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: String(e) };
+  }
+});
+
+ipcMain.handle('clear-model-terminal', async () => {
+  if (modelTerminalIsPty && modelTerminal) {
+    try {
+      if (win) win.webContents.send('model-terminal-data', { text: '\x1b[2J\x1b[H' });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: String(e) };
+    }
+  }
+  return { ok: false, message: 'No embedded terminal' };
 });
 
 app.whenReady().then(createWindow);

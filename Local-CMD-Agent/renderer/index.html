@@ -118,6 +118,8 @@
     .modal button { min-width: 120px; }
     .divider { border-top: 1px solid #3b3b42; margin: 14px 0; }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/xterm@4.19.0/css/xterm.css" />
+  <script src="https://unpkg.com/xterm@4.19.0/lib/xterm.js"></script>
 </head>
 <body>
   <div class="app">
@@ -130,26 +132,16 @@
 
     <main class="main">
       <div class="terminalTop">
-        <h2>AGENT INPUT</h2>
-        <label>COMMAND / PROMPT</label>
-        <textarea id="cmdInput" class="cmdArea" placeholder="Nhập câu lệnh hoặc yêu cầu AI ở đây. Ví dụ: dir, node -v, kiểm tra file README.md">dir</textarea>
-
-        <div class="chip-row" id="modelChips"></div>
-
-        <label class="check"><input id="autoClearCmd" type="checkbox" checked> Tự xóa input sau khi RUN CMD / ASK CLAUDE / SEND OUTPUT</label>
-
+        <h2>TERMINAL SESSION</h2>
         <div class="row">
-          <button id="runCmd" class="big">▶ RUN CMD</button>
-          <button id="askClaude" class="big green">💬 ASK CLAUDE</button>
-          <button id="claudeToCmd" class="big green">CLAUDE → CMD</button>
-          <button id="sendOutput" class="big green">SEND OUTPUT → CLAUDE</button>
-          <button id="stopCmd" class="gray big">■ STOP</button>
-          <button id="copyOutput" class="gray big">📋 COPY OUTPUT</button>
-          <button id="clearOutput" class="red big">🧹 CLEAR</button>
+          <button id="startModel" class="big green">▶ START MODEL TERMINAL</button>
+          <button id="stopModel" class="gray big">■ STOP</button>
+          <button id="clearModel" class="red big">🧹 CLEAR</button>
+          <button id="copyModelOutput" class="gray big">📋 COPY TERMINAL OUTPUT</button>
         </div>
-        <div id="status" class="status">Sẵn sàng. RUN CMD chạy local, ASK CLAUDE chỉ khi bật AI.</div>
+        <div id="termStatus" class="status">Model: <span id="runningModel">(stopped)</span> · CWD: <span id="termCwd">(none)</span></div>
       </div>
-      <pre id="output" class="output">Ready...</pre>
+      <div id="terminal" class="output" style="height: calc(100vh - 160px);">Terminal not started.</div>
     </main>
 
     <aside class="right">
@@ -160,9 +152,8 @@
 
       <div class="divider"></div>
 
-      <h2>AI CONFIG</h2>
-      <div class="hint">ASK CLAUDE / CLAUDE → CMD / SEND OUTPUT chỉ chạy khi bật AI và nhấn nút.</div>
-      <label class="check"><input id="enableAi" type="checkbox"> Bật AI calls</label>
+      <h2>MODEL CONFIG</h2>
+      <div class="hint">Token không được lưu. START sẽ spawn CLI với env từ UI.</div>
 
       <label>Base URL</label>
       <input id="baseUrl" value="https://unlimited.aiprimetech.io">
@@ -182,33 +173,21 @@
       <label>Custom model ID</label>
       <input id="customModel" placeholder="Để trống nếu dùng dropdown">
 
-      <label>Max output tokens</label>
-      <input id="maxTokens" type="number" value="800" min="20" max="8000">
-
-      <label class="check"><input id="includeSelectedFile" type="checkbox"> Gửi nội dung file đã chọn đến AI</label>
-
-      <div class="tokenBox">
-        <div>Input: <b id="inTok">0</b></div>
-        <div>Output: <b id="outTok">0</b></div>
-        <div>Cache Create: <b id="cacheCreate">0</b></div>
-        <div>Cache Read: <b id="cacheRead">0</b></div>
-        <div>Requests: <b id="reqCount">0</b></div>
-        <div>Total: <b id="totalTok">0</b></div>
+      <div class="row" style="margin-top:12px">
+        <button id="startModelBtn" class="green" style="flex:1">START MODEL TERMINAL</button>
+        <button id="stopModelBtn" class="gray" style="flex:1">STOP TERMINAL</button>
       </div>
 
-      <div id="aiStatus" class="status">AI tắt.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="clearTerminalBtn" class="red" style="flex:1">CLEAR TERMINAL</button>
+        <button id="copyTerminalBtn" class="gray" style="flex:1">COPY TERMINAL OUTPUT</button>
+      </div>
+
+      <div id="aiStatus" class="status">Model not running.</div>
     </aside>
   </div>
 
-  <div id="confirmModal" class="modal-overlay">
-    <div class="modal">
-      <p id="confirmMessage">Nội dung này giống câu hỏi, không giống lệnh CMD. Bạn muốn hỏi Claude hay vẫn chạy CMD?</p>
-      <div class="modal-buttons">
-        <button id="modalPrimary" class="green">ASK CLAUDE</button>
-        <button id="modalSecondary" class="gray">RUN ANYWAY</button>
-      </div>
-    </div>
-  </div>
+  <!-- confirm modal removed for model-terminal-only UX -->
 
 <script>
 const $ = id => document.getElementById(id);
@@ -541,118 +520,104 @@ $("runCmd").onclick = () => {
   proceed();
 };
 
-async function performAiCall(payload, outputHeader, clearInputAfter = false) {
-  if (!$("enableAi").checked) {
-    setAiStatus("AI đang tắt. Tick 'Bật AI calls' trước.", "warn");
-    return null;
-  }
+// --- Model terminal logic ---
+let terminalAccum = "";
+let xtermInstance = null;
+let terminalStarted = false;
 
-  const token = $("aiToken").value.trim();
-  if (!token) {
-    setAiStatus("Thiếu token.", "warn");
-    return null;
-  }
-
-  setAiStatus("Đang gửi AI...", "warn");
-  updateOutput(outputHeader + "\n\nĐang chờ...\n");
-
-  try {
-    const data = await window.cmdTool.aiChat(payload);
-    const reply = data.reply || "[Không có text]";
-    updateOutput(outputHeader + "\n\n" + reply);
-    updateTokenBox(data.usage || {});
-    setAiStatus("AI xong. Model: " + (data.model || effectiveModel()), "");
-    if (clearInputAfter) {
-      $("cmdInput").value = "";
+function initXtermIfNeeded() {
+  if (xtermInstance) return;
+  if (window.Terminal) {
+    try {
+      xtermInstance = new window.Terminal({ cursorBlink: true });
+      xtermInstance.open($("terminal"));
+      xtermInstance.onData(d => {
+        // send keystrokes to pty
+        window.modelTerminal.write(d).catch(() => {});
+      });
+    } catch (e) {
+      xtermInstance = null;
     }
-    return reply;
-  } catch (e) {
-    const errorText = "ERROR: " + e.message;
-    updateOutput(outputHeader + "\n\n" + errorText);
-    setAiStatus("Lỗi AI: " + e.message, "bad");
-    return null;
   }
 }
 
-$("askClaude").onclick = async () => {
-  const prompt = $("cmdInput").value.trim();
-  if (!prompt) {
-    setStatus("Chưa nhập yêu cầu AI.", "warn");
-    return;
+window.modelTerminal.onData(d => {
+  const text = d.text || "";
+  terminalAccum += text;
+  if (xtermInstance) {
+    xtermInstance.write(text);
+  } else {
+    // fallback render into terminal div
+    $("terminal").textContent += text;
+    $("terminal").scrollTop = $("terminal").scrollHeight;
   }
-
-  await performAiCall({
-    baseUrl: $("baseUrl").value.trim(),
-    token: $("aiToken").value.trim(),
-    model: effectiveModel(),
-    maxTokens: Number($("maxTokens").value || 800),
-    prompt,
-    includeSelectedFile: $("includeSelectedFile").checked,
-    selectedFileName,
-    selectedFileText
-  }, "=== CLAUDE REPLY ===", $("autoClearCmd").checked);
-};
-
-$("claudeToCmd").onclick = async () => {
-  const prompt = $("cmdInput").value.trim();
-  if (!prompt) {
-    setStatus("Chưa nhập yêu cầu AI.", "warn");
-    return;
-  }
-
-  const reply = await performAiCall({
-    baseUrl: $("baseUrl").value.trim(),
-    token: $("aiToken").value.trim(),
-    model: effectiveModel(),
-    maxTokens: Number($("maxTokens").value || 800),
-    prompt,
-    includeSelectedFile: $("includeSelectedFile").checked,
-    selectedFileName,
-    selectedFileText,
-    systemInstruction: "Bạn là Windows CMD assistant. Hãy trả về CHỈ MỘT lệnh CMD phù hợp để thực hiện yêu cầu. Không giải thích. Không dùng markdown. Không tự chạy lệnh."
-  }, "=== CLAUDE GENERATED CMD ===", false);
-
-  if (reply) {
-    $("cmdInput").value = reply.trim();
-  }
-};
-
-$("sendOutput").onclick = async () => {
-  const currentOutput = $("output").textContent.trim();
-  const extraPrompt = $("cmdInput").value.trim();
-
-  if (!currentOutput) {
-    setStatus("Không có output CMD để gửi Claude.", "warn");
-    return;
-  }
-
-  const prompt = buildClaudePromptForOutput(currentOutput, extraPrompt);
-  await performAiCall({
-    baseUrl: $("baseUrl").value.trim(),
-    token: $("aiToken").value.trim(),
-    model: effectiveModel(),
-    maxTokens: Number($("maxTokens").value || 800),
-    prompt,
-    includeSelectedFile: $("includeSelectedFile").checked,
-    selectedFileName,
-    selectedFileText
-  }, "=== CLAUDE ANALYSIS ===", $("autoClearCmd").checked);
-};
-
-$("copyOutput").onclick = async () => {
-  await navigator.clipboard.writeText(lastOutput || $("output").textContent);
-  setStatus("Đã copy output.");
-};
-
-$("clearOutput").onclick = () => {
-  lastOutput = "";
-  $("output").textContent = "Cleared.";
-  setStatus("Đã xóa output.");
-};
-
-$("cmdInput").addEventListener("keydown", e => {
-  if (e.ctrlKey && e.key === "Enter") $("runCmd").click();
 });
+
+window.modelTerminal.onFallback(d => {
+  setStatus(d.message || 'External CMD opened (fallback).', 'warn');
+});
+
+function updateTerminalStatus(model, cwd) {
+  $("runningModel").textContent = model || '(stopped)';
+  $("termCwd").textContent = cwd || '(none)';
+}
+
+$("startModelBtn").onclick = async () => {
+  const model = effectiveModel();
+  const baseUrl = $("baseUrl").value.trim();
+  const token = $("aiToken").value.trim();
+  const cwd = currentFolder || '';
+
+  setStatus('Starting model terminal...', '');
+  const res = await window.modelTerminal.start({ baseUrl, token, model, cwd });
+  if (!res.ok) {
+    setStatus('Failed to start: ' + (res.message || 'unknown'), 'bad');
+    return;
+  }
+
+  if (res.fallback) {
+    terminalStarted = false;
+    updateTerminalStatus(model, cwd);
+    setStatus('Embedded terminal unavailable, opened external CMD fallback.', 'warn');
+    $("aiStatus").textContent = 'External CMD opened (fallback)';
+    return;
+  }
+
+  // embedded terminal started
+  initXtermIfNeeded();
+  terminalStarted = true;
+  terminalAccum = '';
+  $("terminal").textContent = '';
+  updateTerminalStatus(model, cwd);
+  setStatus('Embedded model terminal started.', '');
+  $("aiStatus").textContent = 'Model running: ' + model;
+};
+
+$("stopModelBtn").onclick = async () => {
+  await window.modelTerminal.stop();
+  terminalStarted = false;
+  updateTerminalStatus('', '');
+  setStatus('Model terminal stopped.');
+  $("aiStatus").textContent = 'Model stopped.';
+};
+
+$("clearTerminalBtn").onclick = async () => {
+  if (xtermInstance) {
+    xtermInstance.clear();
+  } else {
+    $("terminal").textContent = '';
+  }
+  terminalAccum = '';
+};
+
+$("copyTerminalBtn").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(terminalAccum || $("terminal").textContent);
+    setStatus('Terminal output copied.');
+  } catch (e) {
+    setStatus('Copy failed: ' + e.message, 'bad');
+  }
+};
 
 createModelChips();
 
@@ -663,7 +628,7 @@ if (savedFolder) {
   loadFiles().catch(() => {});
 }
 
-setTimeout(() => $("cmdInput").focus(), 300);
+setTimeout(() => { if (xtermInstance) xtermInstance.focus(); else $("terminal").focus(); }, 300);
 </script>
 </body>
 </html>
