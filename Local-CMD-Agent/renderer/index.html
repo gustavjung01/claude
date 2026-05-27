@@ -140,6 +140,7 @@
           <button id="copyModelOutput" class="gray big">📋 COPY TERMINAL OUTPUT</button>
         </div>
         <div id="termStatus" class="status">Model: <span id="runningModel">(stopped)</span> · CWD: <span id="termCwd">(none)</span></div>
+        <div id="status" class="status">Ready.</div>
       </div>
       <div id="terminal" class="output" style="height: calc(100vh - 160px);">Terminal not started.</div>
     </main>
@@ -288,108 +289,7 @@ $("selectFolder").onclick = async () => {
   await loadFiles();
 };
 
-$("runCmd").onclick = async () => {
-  const command = $("cmdInput").value.trim();
 
-  if (!command) {
-    setStatus("Chưa nhập lệnh.", "warn");
-    return;
-  }
-
-  if (dangerous(command) && !confirm("Lệnh có vẻ nguy hiểm. Chạy tiếp không?")) return;
-
-  if ($("autoClearCmd").checked) {
-    $("cmdInput").value = "";
-    $("cmdInput").focus();
-  }
-
-  lastOutput = "";
-  $("output").textContent = "Running...\n";
-  setStatus("Đang chạy CMD...");
-
-  const result = await window.cmdTool.runCmd({
-    cwd: currentFolder,
-    command
-  });
-
-  lastOutput =
-    "CWD: " + result.cwd + "\n" +
-    "COMMAND: " + result.command + "\n" +
-    "EXIT: " + result.exitCode + "\n\n" +
-    "STDOUT:\n" + (result.stdout || "") + "\n\n" +
-    "STDERR:\n" + (result.stderr || "");
-
-  $("output").textContent = lastOutput;
-  setStatus(result.ok ? "CMD chạy xong OK." : "CMD chạy xong, có lỗi.", result.ok ? "" : "bad");
-};
-
-$("stopCmd").onclick = async () => {
-  await window.cmdTool.stopCmd();
-  setStatus("Đã gửi lệnh STOP.");
-};
-
-$("copyOutput").onclick = async () => {
-  await navigator.clipboard.writeText(lastOutput || $("output").textContent);
-  setStatus("Đã copy output.");
-};
-
-$("clearOutput").onclick = () => {
-  lastOutput = "";
-  $("output").textContent = "Cleared.";
-  setStatus("Đã xóa output.");
-};
-
-$("cmdInput").addEventListener("keydown", e => {
-  if (e.ctrlKey && e.key === "Enter") $("runCmd").click();
-});
-
-window.cmdTool.onCmdOutput(data => {
-  appendOutput(data.text || "");
-});
-
-function updateOutput(text) {
-  lastOutput = text;
-  $("output").textContent = lastOutput;
-  $("output").scrollTop = $("output").scrollHeight;
-}
-
-function buildClaudePromptForOutput(outputText, requestText) {
-  let prompt = "Hãy phân tích đầu ra CMD dưới đây và đề xuất bước tiếp theo.\n";
-  prompt += "OUTPUT CMD:\n" + outputText + "\n\n";
-  if (requestText) {
-    prompt += "YÊU CẦU BỔ SUNG:\n" + requestText + "\n\n";
-  }
-  prompt += "Chỉ trả lời kế tiếp bằng văn bản. Không chạy lệnh tự động.";
-  return prompt;
-}
-
-function showConfirm(message, primaryText, secondaryText, primaryHandler, secondaryHandler) {
-  const modal = $("confirmModal");
-  $("confirmMessage").textContent = message;
-  $("modalPrimary").textContent = primaryText;
-  $("modalSecondary").textContent = secondaryText;
-
-  const primaryClick = () => {
-    hideConfirm();
-    primaryHandler();
-  };
-
-  const secondaryClick = () => {
-    hideConfirm();
-    secondaryHandler();
-  };
-
-  $("modalPrimary").onclick = primaryClick;
-  $("modalSecondary").onclick = secondaryClick;
-  modal.style.display = "flex";
-}
-
-function hideConfirm() {
-  const modal = $("confirmModal");
-  modal.style.display = "none";
-  $("modalPrimary").onclick = null;
-  $("modalSecondary").onclick = null;
-}
 
 function isNaturalLanguageInput(text) {
   const trimmed = text.trim();
@@ -402,123 +302,6 @@ function isNaturalLanguageInput(text) {
   }
   return true;
 }
-
-function selectModelChip(value) {
-  $("modelSelect").value = value;
-  document.querySelectorAll(".chip").forEach(x => x.classList.toggle("active", x.dataset.model === value));
-}
-
-function createModelChips() {
-  const chips = [
-    { label: "Haiku 4.5", value: "claude-haiku-4-5-20251001" },
-    { label: "Sonnet 3.7", value: "claude-3-7-sonnet-20250219" },
-    { label: "Sonnet 3.5", value: "claude-3-5-sonnet-20241022" }
-  ];
-  const container = $("modelChips");
-  container.innerHTML = "";
-  for (const item of chips) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "chip";
-    button.dataset.model = item.value;
-    button.textContent = item.label;
-    button.onclick = () => selectModelChip(item.value);
-    container.appendChild(button);
-  }
-  selectModelChip($("modelSelect").value);
-}
-
-$("loadModels").onclick = async () => {
-  if (!$("enableAi").checked) {
-    setAiStatus("AI đang tắt. Tick 'Bật AI calls' trước.", "warn");
-    return;
-  }
-
-  const token = $("aiToken").value.trim();
-  if (!token) {
-    setAiStatus("Thiếu token.", "warn");
-    return;
-  }
-
-  setAiStatus("Đang load models...", "warn");
-
-  try {
-    const data = await window.cmdTool.loadModels({
-      baseUrl: $("baseUrl").value.trim(),
-      token
-    });
-
-    if (!data.models || !data.models.length) {
-      setAiStatus("Không lấy được model, giữ fallback list.", "warn");
-      return;
-    }
-
-    $("modelSelect").innerHTML = "";
-    for (const id of data.models) {
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = id;
-      $("modelSelect").appendChild(opt);
-    }
-
-    const preferred = "claude-haiku-4-5-20251001";
-    if (data.models.includes(preferred) && data.models.includes(preferred)) $("modelSelect").value = preferred;
-    createModelChips();
-    setAiStatus("Đã load " + data.models.length + " models.", "");
-  } catch (e) {
-    setAiStatus("Lỗi load models: " + e.message, "bad");
-  }
-};
-
-async function runCmdWithText(command) {
-  if (dangerous(command) && !confirm("Lệnh có vẻ nguy hiểm. Chạy tiếp không?")) return;
-
-  lastOutput = "";
-  updateOutput("Running...\n");
-  setStatus("Đang chạy CMD...");
-
-  const result = await window.cmdTool.runCmd({
-    cwd: currentFolder,
-    command
-  });
-
-  updateOutput(
-    "CWD: " + result.cwd + "\n" +
-    "COMMAND: " + result.command + "\n" +
-    "EXIT: " + result.exitCode + "\n\n" +
-    "STDOUT:\n" + (result.stdout || "") + "\n\n" +
-    "STDERR:\n" + (result.stderr || "")
-  );
-  setStatus(result.ok ? "CMD chạy xong OK." : "CMD chạy xong, có lỗi.", result.ok ? "" : "bad");
-}
-
-$("runCmd").onclick = () => {
-  const command = $("cmdInput").value.trim();
-  if (!command) {
-    setStatus("Chưa nhập lệnh.", "warn");
-    return;
-  }
-
-  const proceed = async () => {
-    await runCmdWithText(command);
-    if ($("autoClearCmd").checked) {
-      $("cmdInput").value = "";
-    }
-  };
-
-  if (isNaturalLanguageInput(command)) {
-    showConfirm(
-      "Nội dung này giống câu hỏi, không giống lệnh CMD. Bạn muốn hỏi Claude hay vẫn chạy CMD?",
-      "ASK CLAUDE",
-      "RUN ANYWAY",
-      () => $("askClaude").click(),
-      proceed
-    );
-    return;
-  }
-
-  proceed();
-};
 
 // --- Model terminal logic ---
 let terminalAccum = "";
@@ -649,7 +432,9 @@ if (sel) {
   };
 }
 
-createModelChips();
+$("loadModels").onclick = () => {
+  setAiStatus("LOAD MODELS is disabled in terminal-only mode.", "warn");
+};
 
 const savedFolder = localStorage.getItem("cmd_tool_folder");
 if (savedFolder) {
