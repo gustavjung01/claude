@@ -1,0 +1,9 @@
+﻿{
+  "name": "local-cmd-agent",
+  "version": "1.0.0",
+  "description": "Local CMD Agent for workspace file preview and command execution",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron ."
+  }
+}
